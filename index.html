@@ -171,12 +171,22 @@
     padding:16px;font-family:'Cascadia Code','Fira Code','Consolas',monospace;
     font-size:13px;line-height:1.7;color:#e5e7eb;white-space:pre-wrap;
     word-break:break-word;max-height:400px;overflow-y:auto;
+    cursor:text;outline:none;transition:box-shadow .2s;
+  }
+  .script-body[contenteditable="true"]:focus{
+    box-shadow:inset 0 0 0 2px #7c3aed;border-radius:0 0 12px 12px;
+  }
+  .script-edit-badge{
+    display:inline-flex;align-items:center;gap:4px;padding:3px 8px;
+    background:rgba(124,58,237,.25);border-radius:6px;
+    font-size:11px;font-weight:700;color:#c4b5fd;letter-spacing:.3px;
   }
   .script-body .s-label{color:#a78bfa;font-weight:700}
   .script-body .s-value{color:#34d399}
   .script-body .s-action{color:#fbbf24}
   .script-body .s-macro{color:#60a5fa;font-weight:700}
   .script-body .s-divider{color:#4b5563}
+  .script-body .s-placeholder{color:#1e1b4b;font-weight:700;background:#fbbf24;padding:1px 6px;border-radius:3px;}
 
   /* Observação Interna */
   .obs-section{
@@ -204,30 +214,15 @@
     padding:16px;font-family:'Cascadia Code','Fira Code','Consolas',monospace;
     font-size:12.5px;line-height:1.7;color:#d1d5db;white-space:pre-wrap;
     word-break:break-word;max-height:350px;overflow-y:auto;
+    cursor:text;outline:none;transition:box-shadow .2s;
+  }
+  .obs-body[contenteditable="true"]:focus{
+    box-shadow:inset 0 0 0 2px #f59e0b;border-radius:0 0 12px 12px;
   }
   .obs-body .obs-placeholder{color:#f59e0b;font-weight:700;background:rgba(245,158,11,.1);padding:1px 4px;border-radius:3px}
   .obs-body .obs-macro-ref{color:#60a5fa;font-weight:600}
 
   .hidden{display:none}
-
-  /* Rodapé de atualização */
-  .version-badge{
-    position:fixed;bottom:12px;left:12px;z-index:10;
-    display:inline-flex;align-items:center;gap:6px;
-    padding:6px 12px;background:rgba(255,255,255,.85);
-    backdrop-filter:blur(8px);border:1px solid #e8e5f0;
-    border-radius:20px;font-size:11px;font-weight:600;
-    color:#6b7280;box-shadow:0 1px 4px rgba(0,0,0,.04);
-    transition:all .2s ease;cursor:default;
-  }
-  .version-badge:hover{color:#6d28d9;border-color:#c4b5fd;background:rgba(255,255,255,.95)}
-  .version-badge .version-dot{
-    width:6px;height:6px;border-radius:50%;background:#22c55e;flex-shrink:0;
-    box-shadow:0 0 0 2px rgba(34,197,94,.2);
-  }
-  @media (max-width:480px){
-    .version-badge{font-size:10px;padding:5px 10px;bottom:8px;left:8px}
-  }
 </style>
 </head>
 <body>
@@ -247,11 +242,6 @@
 </div>
 <div class="toast" id="toast"></div>
 
-<div class="version-badge" title="Última atualização do projeto">
-  <span class="version-dot"></span>
-  <span>Atualizado em 20/04/2026</span>
-</div>
-
 <script>
 const MACROS_DB = {
   CSIATO00: { code:"CSIATO00", name:"[Invasão de conta] - Incidente Negado - Recuperação em Andamento", type:"principal" },
@@ -268,6 +258,7 @@ const MACROS_DB = {
   CSICR01:  { code:"CSICR01", name:"[Replay de Transação] - Incidente Acatado - Devolução Integral", type:"principal" },
   CSIAPX03: { code:"CSIAPX03", name:"Incidentes com Boletos de contas de consumo", type:"apendice" },
   CSIAPX08: { code:"CSIAPX08", name:"Incidentes com Triangulação", type:"apendice" },
+  CSIAPX13: { code:"CSIAPX13", name:"Incidentes com Cash-in Financing", type:"apendice" },
   CSIAPX09_TENT: { code:"CSIAPX09", name:"Incidentes com TENTATIVA DE RECUPERAÇÃO de transações financiadas [Pix e Boleto no crédito]", type:"apendice" },
   CSIAPX09_ACAT: { code:"CSIAPX09", name:"Incidentes com PIX/Boleto Financiado [Acatado]", type:"apendice" },
   CSIAPX15: { code:"CSIAPX15", name:"Incidentes com Cripto [Evasão por Crypto] - [Negado]", type:"apendice" },
@@ -324,6 +315,7 @@ const STEPS = {
       {label:"NuPay",value:"nupay",desc:"NuPay for PJ / Business / Gift Card"},
       {label:"Recarga / Saque ATM",value:"recarga_saque",desc:"Estabelecimentos confiáveis"},
       {label:"Conta Nu (beneficiário)",value:"conta_nu",desc:"Transação entre contas Nu"},
+      {label:"Cash-in (conversão de limite)",value:"cash_in",desc:"Conversão de limite em saldo — reembolso desabilitado"},
       {label:"Misto (vários tipos)",value:"misto",desc:"Combina diferentes transações"},
     ]
   },
@@ -432,6 +424,7 @@ const STEPS = {
       {label:"NuPay",value:"nupay_golpe",desc:"NuPay for PJ / Business / Gift Card"},
       {label:"Recarga / Saque ATM",value:"recarga_saque_golpe",desc:"Estabelecimentos confiáveis — sem recuperação"},
       {label:"Conta Nu (beneficiário)",value:"conta_nu_golpe",desc:"Transação entre contas Nu"},
+      {label:"Cash-in (conversão de limite)",value:"cash_in_golpe",desc:"Conversão de limite em saldo — reembolso desabilitado"},
       {label:"Misto (vários tipos)",value:"misto_golpe",desc:"Combina diferentes transações"},
     ]
   },
@@ -589,8 +582,7 @@ function getMistoNotes(tipos) {
     n.push("PIX: MED disparado automaticamente. Verificar Widget Infrações DICT/MED. PIX >80 dias: sem MED.");
   }
   if (tipos.includes('carta') || tipos.includes('gcarta')) {
-    n.push("Débito/Crédito/Boleto outra IF: Enviar Carta de Compromisso via Zendesk (CSIB01). E-mail: legitimidade@nubank.com.br. Débito >90 dias: sem carta.");
-    n.push("🏦 Se a IF do recebedor NÃO estiver mapeada: registrar observação no Marte com a tag [IF_NAO_MAPEADA].");
+    n.push("Débito/Crédito/Boleto outra IF: Carta de Compromisso enviada pela automação. Débito >90 dias: sem carta.");
   }
   if (tipos.includes('boleto_nu') || tipos.includes('gboleto_nu')) {
     n.push("Boleto Nubank: Contestar no Widget de Boletos. Verificar status: Aceito / Revertido / Processando.");
@@ -608,7 +600,7 @@ function getMistoNotes(tipos) {
     n.push("Empréstimo: NÃO cancelar diretamente no Widget. Se acatado, enviar para 2nd Level via canal Medium Adjustments.");
   }
   if (tipos.includes('cashin') || tipos.includes('gcashin')) {
-    n.push("Cash-in Financing: reembolso desabilitado para transações de cash-in. Ajustar manualmente se necessário.");
+    n.push("Cash-in Financing (CSIAPX13): reembolso desabilitado para transações de cash-in. Ajustar manualmente se necessário.");
   }
   if (tipos.includes('recarga') || tipos.includes('grecarga')) {
     n.push("Recarga/Saque ATM: estabelecimentos confiáveis, sem tentativa de recuperação.");
@@ -808,15 +800,17 @@ function getMacroResult(a) {
           notes.push("PIX acima de 80 dias: sistema não aciona MED. Reenviar macro de Pix fora do prazo.");
         }
         if (a.tipo_transacao_golpe === "carta_golpe") {
-          notes.push("Enviar Carta de Compromisso via Zendesk (Macro CSIB01). E-mail: legitimidade@nubank.com.br.");
-          notes.push("🏦 Se a IF do recebedor NÃO estiver mapeada: registrar observação no Marte com a tag [IF_NAO_MAPEADA].");
           notes.push("Débito com mais de 90 dias: não enviar carta, posicionar como Sem Recuperação.");
         }
         if (a.tipo_transacao_golpe === "boleto_nu_golpe") {
           notes.push("Contestar no Widget de Boletos: Processando → estorno integral em até 4 dias | Aceito → verificar saldo.");
         }
+        if (a.tipo_transacao_golpe === "cash_in_golpe") {
+          notes.push("Cash-in Financing: reembolso desabilitado para esse tipo de transação. Ajustar manualmente se necessário.");
+        }
       }
     }
+    if (a.tipo_transacao_golpe === "cash_in_golpe") macros.push(MACROS_DB.CSIAPX13);
     if (a.tipo_transacao_golpe !== "nupay_golpe" && a.triangulacao === "sim") {
       macros.push(MACROS_DB.CSIAPX08);
       notes.push("Orientar cliente a registrar solicitação na outra IF. Não cancelar MED.");
@@ -927,13 +921,12 @@ function getMacroResult(a) {
       getMistoNotes(tipos).forEach(n => notes.push(n));
     } else {
       if (a.tipo_transacao_negado === "pix") notes.push("MED disparado automaticamente. Verificar Widget Infrações DICT/MED. PIX >80 dias: sem MED.");
-      if (a.tipo_transacao_negado === "carta") {
-        notes.push("Enviar Carta de Compromisso via Zendesk (CSIB01). E-mail: legitimidade@nubank.com.br. Débito >90 dias: sem carta.");
-        notes.push("🏦 Se a IF do recebedor NÃO estiver mapeada: registrar observação no Marte com a tag [IF_NAO_MAPEADA].");
-      }
+      if (a.tipo_transacao_negado === "carta") notes.push("Débito com mais de 90 dias: não enviar carta, posicionar como Sem Recuperação.");
       if (a.tipo_transacao_negado === "boleto_nu") notes.push("Contestar no Widget de Boletos. Verificar status: Aceito / Revertido / Processando.");
+      if (a.tipo_transacao_negado === "cash_in") notes.push("Cash-in Financing: reembolso desabilitado para esse tipo de transação. Ajustar manualmente se necessário.");
     }
   }
+  if (a.tipo_transacao_negado === "cash_in") macros.push(MACROS_DB.CSIAPX13);
   if (a.transacao_financiada === "sim") {
     macros.push(MACROS_DB.CSIAPX09_TENT);
     notes.push("Adicionar macro apêndice de transações financiadas ao posicionamento.");
@@ -1039,7 +1032,8 @@ function generateScript(a, result) {
       lines.push("- MED disparado automaticamente ao marcar transações.");
     } else if (a.tipo_transacao_negado === "carta") {
       lines.push("Transações: Débito/Crédito/Boleto outra IF");
-      lines.push("- Carta de Compromisso enviada via Zendesk (CSIB01).");
+      lines.push("- Carta de Compromisso enviada.");
+      lines.push("[cole aqui]");
     } else if (a.tipo_transacao_negado === "boleto_nu") {
       lines.push("Transações: Boleto Nubank");
       lines.push("- Contestação realizada no Widget de Boletos.");
@@ -1062,6 +1056,10 @@ function generateScript(a, result) {
       lines.push("Transações: Conta Nu (beneficiário)");
       lines.push("- Verificado status do reporte de fraude e saldo no BKO.");
       lines.push("- Comentário registrado no Big Mama: Csi-Scam-Victim || Customer__ID:");
+    } else if (a.tipo_transacao_negado === "cash_in") {
+      lines.push("Transações: Cash-in (conversão de limite)");
+      lines.push("- Cash-in Financing: reembolso desabilitado. Ajustar manualmente se necessário.");
+      lines.push("- Macro apêndice CSIAPX13 adicionada.");
     } else if (a.tipo_transacao_negado === "misto") {
       const labels = a.misto_tipos ? getMistoLabels(a.misto_tipos, 'misto_tipos') : ['Vários tipos'];
       lines.push("Transações: Misto — " + labels.join(' + '));
@@ -1086,6 +1084,7 @@ function generateScript(a, result) {
     lines.push("- Dispositivos desconectados");
     lines.push("- Tokenizações canceladas");
     lines.push("- Conta desbloqueada");
+    lines.push("[cole aqui]");
     lines.push("");
     lines.push(`Decisão: NEGADO`);
     lines.push(`Macro(s): ${macroList}`);
@@ -1116,6 +1115,7 @@ function generateScript(a, result) {
     lines.push("- Dispositivos desconectados");
     lines.push("- Tokenizações canceladas");
     lines.push("- Conta desbloqueada");
+    lines.push("[cole aqui]");
     lines.push("");
     lines.push(`Decisão: ACATADO — Vulnerabilidade explorada`);
     lines.push(`Macro(s): ${macroList}`);
@@ -1130,7 +1130,7 @@ function generateScript(a, result) {
     lines.push("");
 
     lines.push("Verificação de vulnerabilidades:");
-    lines.push("- Sem indícios de vulnerabilidade explorada (malware/acesso remoto/liveness/LGPD).");
+    lines.push("- Sem indícios de vulnerabilidade explorada.");
     lines.push(`- Incidente classificado como Golpe — ${moName}.`);
     lines.push("");
 
@@ -1173,11 +1173,15 @@ function generateScript(a, result) {
         lines.push("Transações: Misto — " + labels.join(' + '));
         lines.push("- Bloqueio e recuperação conforme cada tipo de transação.");
       } else {
-        const txLabels = {pix_golpe:"PIX",carta_golpe:"Débito/Crédito/Boleto outra IF",boleto_nu_golpe:"Boleto Nubank",misto_golpe:"Misto (vários tipos)"};
+        const txLabels = {pix_golpe:"PIX",carta_golpe:"Débito/Crédito/Boleto outra IF",boleto_nu_golpe:"Boleto Nubank",cash_in_golpe:"Cash-in (conversão de limite)",misto_golpe:"Misto (vários tipos)"};
         lines.push(`Transações: ${txLabels[a.tipo_transacao_golpe] || ""}`);
         if (a.tipo_transacao_golpe === "pix_golpe") lines.push("- MED disparado automaticamente.");
-        if (a.tipo_transacao_golpe === "carta_golpe") lines.push("- Carta de Compromisso enviada via Zendesk (CSIB01).");
+        if (a.tipo_transacao_golpe === "carta_golpe") { lines.push("- Carta de Compromisso enviada."); lines.push("[cole aqui]"); }
         if (a.tipo_transacao_golpe === "boleto_nu_golpe") lines.push("- Contestação realizada no Widget de Boletos.");
+        if (a.tipo_transacao_golpe === "cash_in_golpe") {
+          lines.push("- Cash-in Financing: reembolso desabilitado. Ajustar manualmente se necessário.");
+          lines.push("- Macro apêndice CSIAPX13 adicionada.");
+        }
       }
       const recLabels = {andamento:"Recuperação em andamento.",devolucao:"Devolução total ou parcial realizada.",sem:"Sem recuperação de valores."};
       if (a.status_recuperacao_golpe) lines.push(`- Status: ${recLabels[a.status_recuperacao_golpe] || ""}`);
@@ -1191,8 +1195,8 @@ function generateScript(a, result) {
     lines.push("");
 
     lines.push("Ações realizadas:");
-    lines.push("- Bloqueio e recuperação conforme tipo de transação");
     lines.push("- Conta desbloqueada");
+    lines.push("[cole aqui]");
     lines.push("");
     lines.push(`Decisão: NEGADO`);
     lines.push(`Macro(s): ${macroList}`);
@@ -1227,9 +1231,9 @@ function generateScript(a, result) {
 
     lines.push("Ações realizadas:");
     lines.push("- Ajustes realizados na conta do cliente");
-    lines.push("- Bloqueio e recuperação conforme tipo de transação");
     if (a.transacao_financiada === "sim") lines.push("- Parcelas de transações financiadas antecipadas");
     lines.push("- Conta desbloqueada");
+    lines.push("[cole aqui]");
     lines.push("");
     lines.push(`Decisão: ACATADO — ${motLabels[a.motivo_acate_golpe] || "Decisão interna"}`);
     lines.push(`Macro(s): ${macroList}`);
@@ -1250,6 +1254,7 @@ function generateScript(a, result) {
       lines.push("- Ajustes realizados na conta do cliente");
       lines.push("- Cartão denunciado cancelado e novo cartão emitido");
       lines.push("- Conta desbloqueada");
+    lines.push("[cole aqui]");
       lines.push("");
       lines.push(`Decisão: ACATADO — Chip Replay`);
     } else {
@@ -1262,6 +1267,7 @@ function generateScript(a, result) {
       lines.push("Ações realizadas:");
       lines.push("- Cartão denunciado cancelado e novo cartão emitido");
       lines.push("- Conta desbloqueada");
+    lines.push("[cole aqui]");
       lines.push("");
       lines.push(`Decisão: NEGADO — Sem indícios de Chip Replay`);
     }
@@ -1462,14 +1468,15 @@ function renderResult(result) {
     .replace(/(NEGADO[^<\n]*)/g, '<span style="color:#f87171;font-weight:700">$1</span>')
     .replace(/(INVÁLIDO[^<\n]*)/g, '<span style="color:#fbbf24;font-weight:700">$1</span>')
     .replace(/(CANCELADO)/g, '<span style="color:#fbbf24;font-weight:700">$1</span>')
-    .replace(/(CSI\w+)/g, '<span class="s-macro">$1</span>');
+    .replace(/(CSI\w+)/g, '<span class="s-macro">$1</span>')
+    .replace(/(\[cole aqui\])/g, '<span class="s-placeholder">$1</span>');
 
   html += `<div class="script-section">`;
   html += `<div class="script-header">`;
   html += `<span class="script-header-title">📄 Script de Análise</span>`;
   html += `<button class="copy-script-btn" id="copy-script-btn" onclick="copyScript()">📋 Copiar tudo</button>`;
   html += `</div>`;
-  html += `<div class="script-body" id="script-body">${scriptHtml}</div>`;
+  html += `<div class="script-body" id="script-body" contenteditable="true" spellcheck="false">${scriptHtml}</div>`;
   html += `</div>`;
 
   // Observação Interna (BPO)
@@ -1485,8 +1492,7 @@ function renderResult(result) {
     html += `<span class="obs-header-title">📨 Observação Interna (BPO)</span>`;
     html += `<button class="copy-obs-btn" id="copy-obs-btn" onclick="copyObs()">📋 Copiar</button>`;
     html += `</div>`;
-    html += `<div class="obs-body">`;
-    html += `<span class="obs-label">${obs.label}</span>\n\n`;
+    html += `<div class="obs-body" id="obs-body" contenteditable="true" spellcheck="false">`;
     html += obsHtml;
     html += `</div></div>`;
   }
@@ -1518,8 +1524,8 @@ function copyCode(code, idx) {
 }
 
 function copyScript() {
-  const result = getMacroResult(answers);
-  const text = generateScript(answers, result);
+  const el = document.getElementById('script-body');
+  const text = el ? el.innerText : generateScript(answers, getMacroResult(answers));
   navigator.clipboard.writeText(text).then(() => {
     const btn = document.getElementById('copy-script-btn');
     btn.textContent = '✅ Copiado!';
@@ -1533,9 +1539,9 @@ function copyScript() {
 }
 
 function copyObs() {
-  const obs = getObservacaoInterna(answers);
-  if (!obs) return;
-  navigator.clipboard.writeText(obs.text).then(() => {
+  const el = document.getElementById('obs-body');
+  const text = el ? el.innerText : (getObservacaoInterna(answers) || {text:''}).text;
+  navigator.clipboard.writeText(text).then(() => {
     const btn = document.getElementById('copy-obs-btn');
     btn.textContent = '✅ Copiado!';
     btn.classList.add('copied');
