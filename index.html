@@ -177,6 +177,8 @@
   .script-body .s-action{color:#fbbf24}
   .script-body .s-macro{color:#60a5fa;font-weight:700}
   .script-body .s-divider{color:#4b5563}
+  .script-body[contenteditable="true"]{outline:none;cursor:text}
+  .script-body[contenteditable="true"]:focus{box-shadow:inset 0 0 0 2px rgba(124,58,237,.4)}
 
   /* Observação Interna */
   .obs-section{
@@ -207,6 +209,8 @@
   }
   .obs-body .obs-placeholder{color:#f59e0b;font-weight:700;background:rgba(245,158,11,.1);padding:1px 4px;border-radius:3px}
   .obs-body .obs-macro-ref{color:#60a5fa;font-weight:600}
+  .obs-body[contenteditable="true"]{outline:none;cursor:text}
+  .obs-body[contenteditable="true"]:focus{box-shadow:inset 0 0 0 2px rgba(245,158,11,.4)}
 
   .hidden{display:none}
 </style>
@@ -1518,10 +1522,10 @@ function renderResult(result) {
 
   html += `<div class="script-section">`;
   html += `<div class="script-header">`;
-  html += `<span class="script-header-title">📄 Script de Análise</span>`;
+  html += `<span class="script-header-title">📄 Script de Análise <span style="font-size:10px;font-weight:500;color:#6b7280;letter-spacing:0">✏️ editável</span></span>`;
   html += `<button class="copy-script-btn" id="copy-script-btn" onclick="copyScript()">📋 Copiar tudo</button>`;
   html += `</div>`;
-  html += `<div class="script-body" id="script-body">${scriptHtml}</div>`;
+  html += `<div class="script-body" id="script-body" contenteditable="true" spellcheck="false">${scriptHtml}</div>`;
   html += `</div>`;
 
   // Observação Interna (BPO)
@@ -1534,11 +1538,13 @@ function renderResult(result) {
 
     html += `<div class="obs-section">`;
     html += `<div class="obs-header">`;
-    html += `<span class="obs-header-title">📨 Observação Interna (BPO)</span>`;
+    html += `<span class="obs-header-title">📨 Observação Interna (BPO) <span style="font-size:10px;font-weight:500;color:#6b7280;letter-spacing:0">✏️ editável</span></span>`;
     html += `<button class="copy-obs-btn" id="copy-obs-btn" onclick="copyObs()">📋 Copiar</button>`;
     html += `</div>`;
-    html += `<div class="obs-body">`;
-    html += `<span class="obs-label">${obs.label}</span>\n\n`;
+    html += `<div class="obs-body-label-wrap" style="padding:14px 16px 0">`;
+    html += `<span class="obs-label">${obs.label}</span>`;
+    html += `</div>`;
+    html += `<div class="obs-body" id="obs-body" contenteditable="true" spellcheck="false" style="padding-top:8px">`;
     html += obsHtml;
     html += `</div></div>`;
   }
@@ -1557,7 +1563,7 @@ function renderResult(result) {
 }
 
 function copyCode(code, idx) {
-  navigator.clipboard.writeText(code).then(() => {
+  copyToClipboard(code).then(() => {
     const btn = document.getElementById('copy-btn-' + idx);
     btn.classList.add('copied');
     btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
@@ -1566,13 +1572,48 @@ function copyCode(code, idx) {
       btn.classList.remove('copied');
       btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
     }, 2000);
+  }).catch(() => showToast('⚠️ Não foi possível copiar.'));
+}
+
+function legacyCopy(text) {
+  return new Promise((resolve, reject) => {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.left = '0';
+      ta.style.top = '0';
+      ta.style.opacity = '0';
+      ta.style.pointerEvents = 'none';
+      document.body.appendChild(ta);
+      // Preserve current selection
+      const sel = document.getSelection();
+      const savedRange = sel && sel.rangeCount > 0 ? sel.getRangeAt(0) : null;
+      ta.focus();
+      ta.select();
+      ta.setSelectionRange(0, text.length);
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      // Restore selection
+      if (savedRange && sel) { sel.removeAllRanges(); sel.addRange(savedRange); }
+      ok ? resolve() : reject(new Error('execCommand returned false'));
+    } catch (e) { reject(e); }
   });
 }
 
+function copyToClipboard(text) {
+  // Try modern API first; if it rejects, fall back to execCommand
+  if (navigator.clipboard && window.isSecureContext) {
+    return navigator.clipboard.writeText(text).catch(() => legacyCopy(text));
+  }
+  return legacyCopy(text);
+}
+
 function copyScript() {
-  const result = getMacroResult(answers);
-  const text = generateScript(answers, result);
-  navigator.clipboard.writeText(text).then(() => {
+  const el = document.getElementById('script-body');
+  const text = el ? el.innerText : '';
+  copyToClipboard(text).then(() => {
     const btn = document.getElementById('copy-script-btn');
     btn.textContent = '✅ Copiado!';
     btn.classList.add('copied');
@@ -1581,13 +1622,14 @@ function copyScript() {
       btn.textContent = '📋 Copiar tudo';
       btn.classList.remove('copied');
     }, 2000);
-  });
+  }).catch(() => showToast('⚠️ Não foi possível copiar. Selecione e copie manualmente.'));
 }
 
 function copyObs() {
-  const obs = getObservacaoInterna(answers);
-  if (!obs) return;
-  navigator.clipboard.writeText(obs.text).then(() => {
+  const el = document.getElementById('obs-body');
+  if (!el) return;
+  const text = el.innerText;
+  copyToClipboard(text).then(() => {
     const btn = document.getElementById('copy-obs-btn');
     btn.textContent = '✅ Copiado!';
     btn.classList.add('copied');
@@ -1596,7 +1638,7 @@ function copyObs() {
       btn.textContent = '📋 Copiar';
       btn.classList.remove('copied');
     }, 2000);
-  });
+  }).catch(() => showToast('⚠️ Não foi possível copiar. Selecione e copie manualmente.'));
 }
 
 function showToast(msg) {
