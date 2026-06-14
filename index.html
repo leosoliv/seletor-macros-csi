@@ -263,6 +263,7 @@ const MACROS_DB = {
   CSIPS08:  { code:"CSIPS08", name:"[CSI] Primeiros Socorros - Desacordo comercial", type:"principal" },
   CSIPS11:  { code:"CSIPS11", name:"[CSI] Primeiros Socorros - Transferência/PIX para pessoa/empresa errada", type:"principal" },
   CSISTS13: { code:"CSISTS13", name:"[CSI] Status do Incidente - Incidente cancelado + conta desbloqueada", type:"principal" },
+  CSIMED02: { code:"CSIMED02", name:"MED - Transação com mais de 80 dias corridos", type:"apendice" },
 };
 
 const STEPS = {
@@ -298,7 +299,7 @@ const STEPS = {
   tipo_transacao_negado: {
     question:"Qual é o tipo principal de transação?", icon:"💳",
     options:[
-      {label:"PIX (saldo ou financiado)",value:"pix",desc:"Transferência via PIX"},
+      {label:"PIX",value:"pix",desc:"Transferência via PIX"},
       {label:"Débito / Crédito / Boleto outra IF",value:"carta",desc:"Requer Carta de Compromisso"},
       {label:"Boleto Nubank",value:"boleto_nu",desc:"Boleto emitido pelo Nubank"},
       {label:"WhatsApp Pay",value:"whatsapp",desc:"Pagamento via WhatsApp"},
@@ -407,7 +408,7 @@ const STEPS = {
   tipo_transacao_golpe: {
     question:"Qual é o tipo principal de transação?", icon:"💳",
     options:[
-      {label:"PIX (saldo ou financiado)",value:"pix_golpe",desc:"MED disparado automaticamente"},
+      {label:"PIX",value:"pix_golpe",desc:"MED disparado automaticamente"},
       {label:"Débito / Crédito / Boleto outra IF",value:"carta_golpe",desc:"Requer Carta de Compromisso"},
       {label:"Boleto Nubank",value:"boleto_nu_golpe",desc:"Contestar no Widget de Boletos"},
       {label:"WhatsApp Pay",value:"whatsapp_golpe",desc:"Contestação via Meta (WhatsApp)"},
@@ -466,7 +467,7 @@ const STEPS = {
     question:"Quais tipos de transação estão envolvidos? (selecione todos)", icon:"📋",
     multiSelect: true,
     options:[
-      {label:"PIX (saldo ou financiado)",value:"mx_pix",desc:"Transferência via PIX"},
+      {label:"PIX",value:"mx_pix",desc:"Transferência via PIX"},
       {label:"Débito / Crédito / Boleto outra IF",value:"mx_carta",desc:"Requer Carta de Compromisso"},
       {label:"Boleto Nubank",value:"mx_boleto_nu",desc:"Boleto emitido pelo Nubank"},
       {label:"WhatsApp Pay",value:"mx_whatsapp",desc:"Pagamento via WhatsApp"},
@@ -482,7 +483,7 @@ const STEPS = {
     question:"Quais tipos de transação estão envolvidos? (selecione todos)", icon:"📋",
     multiSelect: true,
     options:[
-      {label:"PIX (saldo ou financiado)",value:"mgx_pix",desc:"MED disparado automaticamente"},
+      {label:"PIX",value:"mgx_pix",desc:"MED disparado automaticamente"},
       {label:"Débito / Crédito / Boleto outra IF",value:"mgx_carta",desc:"Requer Carta de Compromisso"},
       {label:"Boleto Nubank",value:"mgx_boleto_nu",desc:"Contestar no Widget de Boletos"},
       {label:"WhatsApp Pay",value:"mgx_whatsapp",desc:"Contestação via Meta"},
@@ -499,6 +500,13 @@ const STEPS = {
     options:[
       {label:"Acatado",value:"acatado",desc:"Criptograma repetido ou anomalia no contador"},
       {label:"Negado",value:"negado",desc:"Sem indícios de comprometimento"},
+    ]
+  },
+  pix_prazo: {
+    question:"A transação PIX foi realizada há mais de 80 dias?", icon:"📅",
+    options:[
+      {label:"Sim — acima de 80 dias",value:"sim",desc:"MED não pode ser aberto — usar CSIMED02"},
+      {label:"Não — dentro de 80 dias",value:"nao",desc:"MED disparado normalmente"},
     ]
   },
   emprestimo_decisao: {
@@ -519,7 +527,7 @@ const STEPS = {
 
 let answers = {};
 let stepHistory = ["tipo_incidente"];
-let tempMultiSelect = {}; // temporary state for multi-select steps
+let tempMultiSelect = {};
 
 function getNextStep(cs, v, a) {
   if (cs === "tipo_incidente") {
@@ -529,18 +537,23 @@ function getNextStep(cs, v, a) {
     return "decisao_ato";
   }
   if (cs === "decisao_chip_replay") return null;
+  if (cs === "pix_prazo") {
+    if (a.tipo_incidente === "golpe") return "status_recuperacao_golpe";
+    return "status_recuperacao";
+  }
   if (cs === "tipo_golpe") return "decisao_golpe";
   if (cs === "decisao_golpe") return v === "acatado" ? "motivo_acate_golpe" : "tipo_transacao_golpe";
   if (cs === "motivo_acate_golpe") return "transacao_financiada";
   if (cs === "tipo_transacao_golpe") {
     if (["whatsapp_golpe","pix_whatsapp_golpe","recarga_saque_golpe"].includes(v)) return "triangulacao";
+    if (v === "pix_golpe") return "pix_prazo";
     if (v === "nupay_golpe") return "golpe_nupay_tipo";
     if (v === "conta_nu_golpe") return "golpe_conta_nu_saldo";
     if (v === "misto_golpe") return "misto_tipos_golpe";
     if (v === "emprestimo_golpe") return "emprestimo_decisao";
     return "status_recuperacao_golpe";
   }
-  if (cs === "misto_tipos_golpe") return "status_recuperacao_golpe";
+  if (cs === "misto_tipos_golpe") return v.includes('mgx_emprestimo') ? "emprestimo_decisao" : "status_recuperacao_golpe";
   if (cs === "status_recuperacao_golpe") return "triangulacao";
   if (cs === "golpe_conta_nu_saldo") return "triangulacao";
   if (cs === "golpe_nupay_tipo") return "golpe_nupay_decisao";
@@ -555,14 +568,24 @@ function getNextStep(cs, v, a) {
   if (cs === "malware_reincidente") return v === "sim" ? "transacao_financiada" : "tipo_transacao_negado";
   if (cs === "tipo_transacao_negado") {
     if (["whatsapp","pix_whatsapp","recarga_saque"].includes(v)) return null;
+    if (v === "pix") return "pix_prazo";
     if (v === "nupay") return "nupay_tipo";
     if (v === "misto") return "misto_tipos";
     if (v === "emprestimo") return "emprestimo_decisao";
     return "status_recuperacao";
   }
-  if (cs === "emprestimo_decisao") return v === "negado" ? "emprestimo_prazo" : null;
-  if (cs === "emprestimo_prazo") return null;
-  if (cs === "misto_tipos") return "status_recuperacao";
+  if (cs === "emprestimo_decisao") {
+    if (v === "negado") return "emprestimo_prazo";
+    const fromMisto = (a.misto_tipos && a.misto_tipos.includes('mx_emprestimo')) || (a.misto_tipos_golpe && a.misto_tipos_golpe.includes('mgx_emprestimo'));
+    if (fromMisto) return a.tipo_incidente === "golpe" ? "status_recuperacao_golpe" : "status_recuperacao";
+    return null;
+  }
+  if (cs === "emprestimo_prazo") {
+    const fromMisto = (a.misto_tipos && a.misto_tipos.includes('mx_emprestimo')) || (a.misto_tipos_golpe && a.misto_tipos_golpe.includes('mgx_emprestimo'));
+    if (fromMisto) return a.tipo_incidente === "golpe" ? "status_recuperacao_golpe" : "status_recuperacao";
+    return null;
+  }
+  if (cs === "misto_tipos") return v.includes('mx_emprestimo') ? "emprestimo_decisao" : "status_recuperacao";
   if (cs === "nupay_tipo") return "nupay_decisao";
   if (cs === "nupay_decisao") return a.nupay_tipo === "pj" ? "nupay_pj_conta" : null;
   if (cs === "nupay_pj_conta") return null;
@@ -582,7 +605,7 @@ function getMistoNotes(tipos) {
     n.push("PIX: MED disparado automaticamente. Verificar Widget Infrações DICT/MED. PIX >80 dias: sem MED.");
   }
   if (tipos.includes('carta') || tipos.includes('gcarta')) {
-    n.push("Débito/Crédito/Boleto outra IF: Enviar Carta de Compromisso via Zendesk (CSSB01). E-mail: legitimidade@nubank.com.br. Débito >90 dias: sem carta.");
+    n.push("Débito/Crédito/Boleto outra IF: Carta de Compromisso gerada automaticamente. Débito >90 dias: sem carta.");
   }
   if (tipos.includes('boleto_nu') || tipos.includes('gboleto_nu')) {
     n.push("Boleto Nubank: Contestar no Widget de Boletos. Verificar status: Aceito / Revertido / Processando.");
@@ -612,7 +635,6 @@ function getMistoNotes(tipos) {
 }
 
 function parseMistoTipos(raw, prefix) {
-  // Convert "mx_pix,mx_carta" → ["pix","carta"] or "mgx_pix,mgx_carta" → ["gpix","gcarta"]
   if (!raw) return [];
   return raw.split(',').map(v => v.replace(prefix, ''));
 }
@@ -651,7 +673,7 @@ function getMacroResult(a) {
   if (a.tipo_incidente === "cancelamento") {
     macros.push(MACROS_DB.CSISTS13);
     notes.push("Se cliente passa a reconhecer a transação: abrir Jira para time de Fraude reavaliar conta beneficiária.");
-    notes.push("Registrar no Pelúcio/Marte que a denúncia foi retirada + número do Ticket Jira.");
+    notes.push("Registrar no Marte que a denúncia foi retirada + número do Ticket Jira.");
     notes.push("Informar que não podemos garantir desbloqueio da conta beneficiária (análise sigilosa).");
     registro.push("Status: Cancelado");
     return {macros,notes,registro};
@@ -670,7 +692,7 @@ function getMacroResult(a) {
       notes.push("Avisar o time Texas Rangers via Jira sobre o Chip Replay confirmado.");
       notes.push("Cancelar cartão denunciado e emitir novo cartão (verificar endereço de entrega).");
       notes.push("Realizar ajustes na conta do cliente (conta corrente e/ou crédito).");
-      notes.push("Enviar Carta de Compromisso para recuperação (apenas casos acatados).");
+      notes.push("Carta de Compromisso gerada automaticamente para recuperação (apenas casos acatados).");
       notes.push("Desbloquear conta do cliente antes de encerrar.");
       registro.push("Submotivo: Chip Replay");
       registro.push("Status: Resolvido | Análise: Validar");
@@ -686,7 +708,6 @@ function getMacroResult(a) {
     return {macros,notes,registro};
   }
 
-  // MO labels and exclusion check
   const MO_LABELS = {
     fake_callcenter:"Falso Call Center",eng_social:"Engenharia Social (conhecido/parente)",
     site_falso:"Site Falso / Loja Falsa / Phishing",piramide:"Esquema de Pirâmide",
@@ -707,7 +728,6 @@ function getMacroResult(a) {
   const moExcluido = MO_EXCLUIDOS.includes(a.tipo_golpe);
   const moSubmotivo = MO_SUBMOTIVOS[a.tipo_golpe] || "Outros";
 
-  // GOLPE ACATADO
   if (a.tipo_incidente === "golpe" && a.decisao_golpe === "acatado") {
     macros.push(MACROS_DB.CSIG03);
     notes.push(`Modus Operandi: ${moLabel}`);
@@ -734,7 +754,6 @@ function getMacroResult(a) {
     return {macros,notes,registro};
   }
 
-  // GOLPE NEGADO
   if (a.tipo_incidente === "golpe" && a.decisao_golpe === "negado") {
     notes.push(`Modus Operandi: ${moLabel}`);
     if (moExcluido) notes.push("Este MO é excluído da Política de Reembolso — caso negado conforme critérios de exclusão.");
@@ -794,14 +813,24 @@ function getMacroResult(a) {
         const labels = getMistoLabels(a.misto_tipos_golpe, 'misto_tipos_golpe');
         notes.push("Transações mistas: " + labels.join(' + '));
         getMistoNotes(tipos.map(t => 'g' + t)).forEach(n => notes.push(n));
+        if (tipos.includes('emprestimo')) {
+          if (a.emprestimo_decisao === "acatado") macros.push(MACROS_DB.CSIAPX01);
+          else if (a.emprestimo_prazo === "ate7") macros.push(MACROS_DB.CSIAPX00_7D);
+          else macros.push(MACROS_DB.CSIAPX00_POS7D);
+        }
       } else {
         if (a.tipo_transacao_golpe === "pix_golpe") {
-          notes.push("MED disparado automaticamente. Verificar Widget Infrações DICT/MED.");
-          notes.push("PIX acima de 80 dias: sistema não aciona MED. Reenviar macro de Pix fora do prazo.");
+          if (a.pix_prazo === "sim") {
+            macros.push(MACROS_DB.CSIMED02);
+            notes.push("PIX acima de 80 dias: MED não aplicável. Macro CSIMED02 enviada ao cliente.");
+          } else {
+            notes.push("MED disparado automaticamente. Verificar Widget Infrações DICT/MED.");
+            notes.push("PIX acima de 80 dias: sistema não aciona MED. Reenviar macro de Pix fora do prazo.");
+          }
         }
         if (a.tipo_transacao_golpe === "carta_golpe") {
-          notes.push("Enviar Carta de Compromisso via Zendesk (Macro CSSB01). E-mail: legitimidade@nubank.com.br.");
-          notes.push("Débito com mais de 90 dias: não enviar carta, posicionar como Sem Recuperação.");
+          notes.push("Carta de Compromisso gerada automaticamente.");
+          notes.push("Débito com mais de 90 dias: sem carta, posicionar como Sem Recuperação.");
         }
         if (a.tipo_transacao_golpe === "boleto_nu_golpe") {
           notes.push("Contestar no Widget de Boletos: Processando → estorno integral em até 4 dias | Aceito → verificar saldo.");
@@ -841,7 +870,6 @@ function getMacroResult(a) {
     return {macros,notes,registro};
   }
 
-  // ATO ACATADO
   if (a.decisao_ato === "acatado") {
     macros.push(a.vulnerabilidade_ato === "malware" ? MACROS_DB.CSIATO04 : MACROS_DB.CSIATO03);
     notes.push("Confirmar ATO no Widget de Certificados (força troca de senha).");
@@ -862,7 +890,6 @@ function getMacroResult(a) {
     return {macros,notes,registro};
   }
 
-  // ATO NEGADO
   if (a.tipo_transacao_negado === "whatsapp") {
     macros.push(MACROS_DB.CSSW01);
     notes.push("Cliente precisa abrir contestação junto ao WhatsApp (Meta).");
@@ -947,9 +974,21 @@ function getMacroResult(a) {
       const labels = getMistoLabels(a.misto_tipos, 'misto_tipos');
       notes.push("Transações mistas: " + labels.join(' + '));
       getMistoNotes(tipos).forEach(n => notes.push(n));
+      if (tipos.includes('emprestimo')) {
+        if (a.emprestimo_decisao === "acatado") macros.push(MACROS_DB.CSIAPX01);
+        else if (a.emprestimo_prazo === "ate7") macros.push(MACROS_DB.CSIAPX00_7D);
+        else macros.push(MACROS_DB.CSIAPX00_POS7D);
+      }
     } else {
-      if (a.tipo_transacao_negado === "pix") notes.push("MED disparado automaticamente. Verificar Widget Infrações DICT/MED. PIX >80 dias: sem MED.");
-      if (a.tipo_transacao_negado === "carta") notes.push("Enviar Carta de Compromisso via Zendesk (CSSB01). E-mail: legitimidade@nubank.com.br. Débito >90 dias: sem carta.");
+      if (a.tipo_transacao_negado === "pix") {
+        if (a.pix_prazo === "sim") {
+          macros.push(MACROS_DB.CSIMED02);
+          notes.push("PIX acima de 80 dias: MED não aplicável. Macro CSIMED02 enviada ao cliente.");
+        } else {
+          notes.push("MED disparado automaticamente. Verificar Widget Infrações DICT/MED.");
+        }
+      }
+      if (a.tipo_transacao_negado === "carta") notes.push("Carta de Compromisso gerada automaticamente. Débito >90 dias: sem carta.");
       if (a.tipo_transacao_negado === "boleto_nu") notes.push("Contestar no Widget de Boletos. Verificar status: Aceito / Revertido / Processando.");
     }
   }
@@ -982,7 +1021,6 @@ function renderStep(stepKey, stepNum) {
   html += `</div><div class="options">`;
 
   if (isMulti) {
-    // Already confirmed? Show summary
     if (ans) {
       const selected = ans.split(',');
       s.options.forEach(opt => {
@@ -995,7 +1033,6 @@ function renderStep(stepKey, stepNum) {
         }
       });
     } else {
-      // Editing mode — show toggleable checkboxes
       if (!tempMultiSelect[stepKey]) tempMultiSelect[stepKey] = [];
       const temp = tempMultiSelect[stepKey];
       s.options.forEach(opt => {
@@ -1023,17 +1060,74 @@ function renderStep(stepKey, stepNum) {
   return html;
 }
 
+function getTagsMarte(a) {
+  const tags = [];
+  const hints = [];
+  const skip = ["desacordo","pix_errado","cancelamento","boleto_consumo","chip_replay"];
+  if (skip.includes(a.tipo_incidente)) return null;
+
+  const isAcatado =
+    (a.tipo_incidente === "ato" && a.decisao_ato === "acatado") ||
+    (a.tipo_incidente === "golpe" && a.decisao_golpe === "acatado");
+
+  if (isAcatado) {
+    if (a.tipo_incidente === "ato") {
+      tags.push("[CONFIRMED MO]");
+      const vulnMap = {
+        malware:  "[VULNERABILITY] [MALWARE]",
+        remoto:   "[VULNERABILITY] [REMACCESS]",
+        liveness: "[VULNERABILITY] [DATAACCESS]",
+        lgpd:     "[VULNERABILITY] [DATAACCESS]",
+        outra:    "[VULNERABILITY]"
+      };
+      if (vulnMap[a.vulnerabilidade_ato]) tags.push(vulnMap[a.vulnerabilidade_ato]);
+    }
+    if (a.tipo_incidente === "golpe") {
+      if (a.motivo_acate_golpe === "habitualidade") {
+        tags.push("[HABITUALIDADE]");
+      } else if (a.motivo_acate_golpe === "vulneravel") {
+        tags.push("[VULNERABLE CUSTOMER]");
+      } else if (a.motivo_acate_golpe === "vulnerabilidade") {
+        tags.push("[CONFIRMED MO]");
+        tags.push("[VULNERABILITY]");
+        hints.push("Complementar [VULNERABILITY] com a técnica: [MALWARE], [REMACCESS], [DATAACCESS] ou [PASSRESET]");
+      }
+    }
+    hints.push("Adicionar [PROJETO SWAT] se o valor total for >= 30k");
+  } else {
+    // Negados — tags por MO do golpe
+    const moTagMap = {
+      piramide:           "[PYRAMID]",
+      site_falso:         "[SOCIAL]",
+      social_media:       "[SOCIAL]",
+      compra_falsa:       "[SOCIAL]",
+      falso_leilao:       "[SOCIAL]",
+      taxa_premio:        "[SOCIAL]",
+      boleto_adulterado:  "[SOCIAL]",
+      emprestimo_falso:   "[SOCIAL]",
+      motoboy:            "[MOTOBOY]",
+      eng_social:         "[WHATSAPP]",
+      reporte_incompleto: "[INCOMPLETE]",
+      fake_callcenter:    "[OTHERS]",
+      outro_golpe:        "[OTHERS]"
+    };
+    if (a.tipo_golpe && moTagMap[a.tipo_golpe]) tags.push(moTagMap[a.tipo_golpe]);
+    hints.push("Verificar se aplicável: [FRICTION] (ignorou barreiras do app) | [CHAT-TO-BYPASS] (pediu desbloqueio via chat)");
+  }
+
+  if (!tags.length && !hints.length) return null;
+  return { tags, hints };
+}
+
 function generateScript(a, result) {
   let lines = [];
   const macroList = result.macros.map(m => m.code).join(' + ');
-  const divider = '━'.repeat(40);
 
   // ═══ ATO NEGADO ═══
   if (a.tipo_incidente === "ato" && a.decisao_ato === "negado") {
     lines.push("ANÁLISE: Cliente relata não reconhecer transações.");
     lines.push("");
 
-    // Vulnerabilidade
     if (a.vulnerabilidade_ato === "malware") {
       if (a.malware_reincidente === "sim") {
         lines.push("Verificação de segurança:");
@@ -1052,13 +1146,18 @@ function generateScript(a, result) {
     }
     lines.push("");
 
-    // Tipo de transação
     if (a.tipo_transacao_negado === "pix") {
       lines.push("Transações: PIX");
-      lines.push("- MED disparado.");
+      if (a.pix_prazo === "sim") {
+        lines.push("- Transação acima de 80 dias corridos. MED não aplicável (Res. BCB nº 103).");
+        lines.push("- Macro CSIMED02 enviada ao cliente.");
+      } else {
+        lines.push("- MED disparado.");
+      }
     } else if (a.tipo_transacao_negado === "carta") {
       lines.push("Transações: Débito/Crédito/Boleto outra IF");
-      lines.push("- Carta de Compromisso enviada via Zendesk (CSSB01).");
+      lines.push("- Carta de Compromisso enviada.");
+      lines.push("cole_aqui");
     } else if (a.tipo_transacao_negado === "boleto_nu") {
       lines.push("Transações: Boleto Nubank");
       lines.push("- Contestação realizada no Widget de Boletos.");
@@ -1084,25 +1183,21 @@ function generateScript(a, result) {
     } else if (a.tipo_transacao_negado === "misto") {
       const labels = a.misto_tipos ? getMistoLabels(a.misto_tipos, 'misto_tipos') : ['Vários tipos'];
       lines.push("Transações: Misto — " + labels.join(' + '));
-      lines.push("- Bloqueio e recuperação conforme cada tipo de transação.");
     }
     lines.push("");
 
-    // Recuperação
     if (a.status_recuperacao) {
       const recLabels = {andamento:"Recuperação em andamento.",devolucao:"Devolução total ou parcial realizada.",sem:"Sem recuperação de valores."};
       lines.push(`Status da recuperação: ${recLabels[a.status_recuperacao] || ""}`);
-      lines.push("");
     }
 
-    // Complementos
     if (a.transacao_financiada === "sim") lines.push("- Transações financiadas identificadas. Macro apêndice CSIAPX09 adicionada.");
     if (a.triangulacao === "sim") lines.push("- Triangulação identificada. Macro apêndice CSIAPX08 adicionada. Cliente orientado a registrar na outra IF.");
     if (a.tem_crypto === "sim") lines.push("- Transações de criptomoeda envolvidas. Macro apêndice CSIAPX15 adicionada.");
     lines.push("");
 
     lines.push("Ações realizadas:");
-    lines.push("- Conta desbloqueada");lines.push("[cole aqui]");
+    lines.push("- Conta desbloqueada");lines.push("cole_aqui");
     lines.push("");
     lines.push(`Decisão: NEGADO`);
     lines.push(`Macro(s): ${macroList}`);
@@ -1116,7 +1211,6 @@ function generateScript(a, result) {
     const vulnLabels = {malware:"Malware identificado (toque robótico + app não confiável).",remoto:"Acesso remoto identificado (AnyDesk/TeamViewer/similar).",liveness:"Falha no Liveness identificada.",lgpd:"Quebra de LGPD identificada (colaborador vazou dados).",outra:"Outra vulnerabilidade identificada."};
     lines.push(`- VULNERABILIDADE CONFIRMADA: ${vulnLabels[a.vulnerabilidade_ato] || "Vulnerabilidade identificada."}`);
     lines.push("- Indícios de invasão de conta confirmados.");
-    lines.push("");
 
     if (a.transacao_financiada === "sim") lines.push("- Transações financiadas identificadas. Parcelas antecipadas no Widget Parcelamento de Fatura.");
     if (a.triangulacao === "sim") {
@@ -1130,7 +1224,7 @@ function generateScript(a, result) {
     lines.push("- ATO confirmado no Widget de Certificados (troca de senha forçada)");
     lines.push("- Ajustes realizados na conta do cliente");
     if (a.transacao_financiada === "sim") lines.push("- Parcelas de transações financiadas antecipadas + Jira preenchido");
-    lines.push("- Conta desbloqueada");lines.push("[cole aqui]");
+    lines.push("- Conta desbloqueada");lines.push("cole_aqui");
     lines.push("");
     lines.push(`Decisão: ACATADO — Vulnerabilidade explorada`);
     lines.push(`Macro(s): ${macroList}`);
@@ -1138,10 +1232,7 @@ function generateScript(a, result) {
 
   // ═══ GOLPE NEGADO ═══
   else if (a.tipo_incidente === "golpe" && a.decisao_golpe === "negado") {
-    const moOpt = STEPS.tipo_golpe.options.find(o => o.value === a.tipo_golpe);
-    const moName = moOpt ? moOpt.label : "Não informado";
     lines.push("ANÁLISE: Cliente relata ter sido vítima de golpe.");
-    lines.push(`Modus Operandi: ${moName}`);
     lines.push("");
 
     const MO_EXCLUIDOS_SCRIPT = ["eng_social","site_falso","piramide","emprestimo_falso","falso_leilao","social_media","compra_falsa","taxa_premio","boleto_adulterado","motoboy","reporte_incompleto"];
@@ -1151,7 +1242,6 @@ function generateScript(a, result) {
     if (moExcluidoScript) lines.push("- Este MO é excluído da Política de Reembolso — caso negado conforme critérios de exclusão.");
     lines.push("");
 
-    // Tipo de transação golpe
     if (a.tipo_transacao_golpe === "whatsapp_golpe") {
       lines.push("Transações: WhatsApp Pay");
       lines.push("- Sem possibilidade de recuperação por CSI.");
@@ -1188,25 +1278,26 @@ function generateScript(a, result) {
       if (a.tipo_transacao_golpe === "misto_golpe" && a.misto_tipos_golpe) {
         const labels = getMistoLabels(a.misto_tipos_golpe, 'misto_tipos_golpe');
         lines.push("Transações: Misto — " + labels.join(' + '));
-        lines.push("- Bloqueio e recuperação conforme cada tipo de transação.");
       } else {
         const txLabels = {pix_golpe:"PIX",carta_golpe:"Débito/Crédito/Boleto outra IF",boleto_nu_golpe:"Boleto Nubank",misto_golpe:"Misto (vários tipos)"};
         lines.push(`Transações: ${txLabels[a.tipo_transacao_golpe] || ""}`);
-        if (a.tipo_transacao_golpe === "pix_golpe") lines.push("- MED disparado automaticamente.");
-        if (a.tipo_transacao_golpe === "carta_golpe") lines.push("- Carta de Compromisso enviada via Zendesk (CSSB01).");
+        if (a.tipo_transacao_golpe === "pix_golpe") {
+          if (a.pix_prazo === "sim") {
+            lines.push("- Transação acima de 80 dias corridos. MED não aplicável (Res. BCB nº 103).");
+            lines.push("- Macro CSIMED02 enviada ao cliente.");
+          } else {
+            lines.push("- MED disparado automaticamente.");
+          }
+        }
+        if (a.tipo_transacao_golpe === "carta_golpe") { lines.push("- Carta de Compromisso enviada."); lines.push("cole_aqui"); }
         if (a.tipo_transacao_golpe === "boleto_nu_golpe") lines.push("- Contestação realizada no Widget de Boletos.");
       }
       const recLabels = {andamento:"Recuperação em andamento.",devolucao:"Devolução total ou parcial realizada.",sem:"Sem recuperação de valores."};
       if (a.status_recuperacao_golpe) lines.push(`- Status: ${recLabels[a.status_recuperacao_golpe] || ""}`);
     }
-    lines.push("");
 
     if (a.triangulacao === "sim") lines.push("- Triangulação identificada. Cliente orientado a registrar na outra IF. MED mantido.");
     if (a.tem_crypto === "sim") lines.push("- Transações de criptomoeda envolvidas. Macro apêndice CSIAPX15 adicionada.");
-    lines.push("");
-
-    lines.push("Ações realizadas:");
-    lines.push("- Bloqueio e recuperação conforme tipo de transação");
     lines.push("");
     lines.push(`Decisão: NEGADO`);
     lines.push(`Macro(s): ${macroList}`);
@@ -1214,10 +1305,7 @@ function generateScript(a, result) {
 
   // ═══ GOLPE ACATADO ═══
   else if (a.tipo_incidente === "golpe" && a.decisao_golpe === "acatado") {
-    const moOpt2 = STEPS.tipo_golpe.options.find(o => o.value === a.tipo_golpe);
-    const moName2 = moOpt2 ? moOpt2.label : "Não informado";
     lines.push("ANÁLISE: Cliente relata ter sido vítima de golpe.");
-    lines.push(`Modus Operandi: ${moName2}`);
     lines.push("");
 
     const motLabels = {
@@ -1229,7 +1317,6 @@ function generateScript(a, result) {
       special:"Casos especiais (Reclame Aqui / RDR / Ouvidoria / Consumidor.gov)."
     };
     lines.push(`Motivo do acate: ${motLabels[a.motivo_acate_golpe] || "Decisão interna."}`);
-    lines.push("");
 
     if (a.transacao_financiada === "sim") lines.push("- Transações financiadas identificadas. Parcelas antecipadas + Jira preenchido.");
     if (a.triangulacao === "sim") {
@@ -1241,7 +1328,6 @@ function generateScript(a, result) {
 
     lines.push("Ações realizadas:");
     lines.push("- Ajustes realizados na conta do cliente");
-    lines.push("- Bloqueio e recuperação conforme tipo de transação");
     if (a.transacao_financiada === "sim") lines.push("- Parcelas de transações financiadas antecipadas");
     lines.push("");
     lines.push(`Decisão: ACATADO — ${motLabels[a.motivo_acate_golpe] || "Decisão interna"}`);
@@ -1264,7 +1350,7 @@ function generateScript(a, result) {
       lines.push("- Caso encaminhado para 2nd Level via Medium Adjustments");
       lines.push("- NÃO cancelar empréstimo diretamente no Widget");
       lines.push("- Conta desbloqueada");
-      lines.push("[cole aqui]");
+      lines.push("cole_aqui");
       lines.push("");
       lines.push(`Decisão: ACATADO — Empréstimo`);
     } else if (a.emprestimo_prazo === "ate7") {
@@ -1274,7 +1360,7 @@ function generateScript(a, result) {
       lines.push("- Cliente orientado a solicitar cancelamento via Chat ou Telefone");
       lines.push("- Informado sobre custo de IOF (mantido por legislação)");
       lines.push("- Conta desbloqueada");
-      lines.push("[cole aqui]");
+      lines.push("cole_aqui");
       lines.push("");
       lines.push(`Decisão: NEGADO — Empréstimo (até 7 dias)`);
     } else {
@@ -1283,7 +1369,7 @@ function generateScript(a, result) {
       lines.push("Ações realizadas:");
       lines.push("- Cliente orientado a antecipar parcelas no app (desconto proporcional dos juros)");
       lines.push("- Conta desbloqueada");
-      lines.push("[cole aqui]");
+      lines.push("cole_aqui");
       lines.push("");
       lines.push(`Decisão: NEGADO — Empréstimo (após 7 dias)`);
     }
@@ -1303,8 +1389,7 @@ function generateScript(a, result) {
       lines.push("- Jira aberto para o time Texas Rangers");
       lines.push("- Carta de Compromisso enviada para recuperação");
       lines.push("- Ajustes realizados na conta do cliente");
-      lines.push("- Cartão denunciado cancelado e novo cartão emitido");
-      lines.push("- Conta desbloqueada");lines.push("[cole aqui]");
+      lines.push("- Conta desbloqueada");lines.push("cole_aqui");
       lines.push("");
       lines.push(`Decisão: ACATADO — Chip Replay`);
     } else {
@@ -1315,8 +1400,7 @@ function generateScript(a, result) {
       lines.push("- Sem indícios de comprometimento no cartão.");
       lines.push("");
       lines.push("Ações realizadas:");
-      lines.push("- Cartão denunciado cancelado e novo cartão emitido");
-      lines.push("- Conta desbloqueada");lines.push("[cole aqui]");
+      lines.push("- Conta desbloqueada");lines.push("cole_aqui");
       lines.push("");
       lines.push(`Decisão: NEGADO — Sem indícios de Chip Replay`);
     }
@@ -1354,7 +1438,7 @@ function generateScript(a, result) {
     lines.push("");
     lines.push("- Incidente cancelado a pedido do cliente.");
     lines.push("- Jira aberto para time de Fraude reavaliar conta beneficiária (se aplicável).");
-    lines.push("- Registro no Pelúcio/Marte com número do Ticket Jira.");
+    lines.push("- Registro no Marte com número do Ticket Jira.");
     lines.push("");
     lines.push(`Decisão: CANCELADO`);
     lines.push(`Macro(s): ${macroList}`);
@@ -1371,16 +1455,19 @@ function generateScript(a, result) {
     lines.push(`Macro(s): ${macroList}`);
   }
 
+  const tagInfo = getTagsMarte(a);
+  if (tagInfo) {
+    lines.push('');
+    lines.push('Tags: ' + (tagInfo.tags.length ? tagInfo.tags.join(' ') : '—'));
+    tagInfo.hints.forEach(h => lines.push('⚙ ' + h));
+  }
+
   return lines.join('\n');
 }
 
 function getObservacaoInterna(a) {
-  // Determine which template to use based on decision
-
-  // Cases that don't need observação interna
   if (["desacordo","pix_errado","cancelamento","boleto_consumo"].includes(a.tipo_incidente)) return null;
 
-  // ACATADO → Reembolso Integral
   const isAcatado =
     (a.tipo_incidente === "ato" && a.decisao_ato === "acatado") ||
     (a.tipo_incidente === "golpe" && a.decisao_golpe === "acatado") ||
@@ -1402,19 +1489,15 @@ CSISTS04 - [CSI] Status do Incidente - Reembolso Integral`
     };
   }
 
-  // NEGADO → determine recovery type
-  // Check misto selections
   const mistoHas = (key, prefix, val) => a[key] ? a[key].split(',').some(v => v === prefix + val) : false;
   const mistoHasPix = mistoHas('misto_tipos','mx_','pix') || mistoHas('misto_tipos_golpe','mgx_','pix');
   const mistoHasOutra = mistoHas('misto_tipos','mx_','carta') || mistoHas('misto_tipos','mx_','boleto_nu') || mistoHas('misto_tipos_golpe','mgx_','carta') || mistoHas('misto_tipos_golpe','mgx_','boleto_nu');
 
-  // Check if it's PIX
   const isPix =
     (a.tipo_transacao_negado === "pix") ||
     (a.tipo_transacao_golpe === "pix_golpe") ||
     mistoHasPix;
 
-  // Check if it's other (carta, boleto, etc)
   const isOutra =
     (a.tipo_transacao_negado === "carta" || a.tipo_transacao_negado === "boleto_nu") ||
     (a.tipo_transacao_golpe === "carta_golpe" || a.tipo_transacao_golpe === "boleto_nu_golpe") ||
@@ -1422,17 +1505,14 @@ CSISTS04 - [CSI] Status do Incidente - Reembolso Integral`
     (a.tipo_transacao_golpe === "misto_golpe" && !mistoHasPix) ||
     mistoHasOutra;
 
-  // Check recovery status
   const hasRecovery =
     (a.status_recuperacao === "andamento" || a.status_recuperacao === "devolucao") ||
     (a.status_recuperacao_golpe === "andamento" || a.status_recuperacao_golpe === "devolucao");
 
-  // Conta Nu with saldo = recovery in progress
   const contaNuComSaldo =
     (a.tipo_transacao_negado === "conta_nu" && (a.status_recuperacao === "andamento" || a.status_recuperacao === "devolucao")) ||
     (a.tipo_transacao_golpe === "conta_nu_golpe" && ["vermelho_saldo","amarelo_saldo","sem_reporte_saldo"].includes(a.golpe_conta_nu_saldo));
 
-  // PIX with recovery
   if (isPix && hasRecovery) {
     return {
       label: "CSI - Informação ao time externo - Tentativa de recuperação [Somente PIX]",
@@ -1453,7 +1533,6 @@ Caso o cliente questione sobre o andamento da sua contestação, siga as orienta
     };
   }
 
-  // Outras transações with recovery (or Conta Nu com saldo)
   if ((isOutra && hasRecovery) || contaNuComSaldo) {
     return {
       label: "CSI - Informação ao time externo - Tentativa de recuperação [Outras transações]",
@@ -1476,7 +1555,6 @@ CSISTS02 - [CSI] Status do Incidente - Finalizado`
     };
   }
 
-  // Default: Sem recuperação
   return {
     label: "CSI - Informação ao time externo - Sem recuperação",
     text:
@@ -1506,7 +1584,6 @@ function renderResult(result) {
   });
   html += `</div>`;
 
-  // Script de Análise
   const scriptText = generateScript(answers, result);
   const scriptHtml = scriptText
     .replace(/^(ANÁLISE:)/gm, '<span class="s-label">$1</span>')
@@ -1518,7 +1595,10 @@ function renderResult(result) {
     .replace(/(INVÁLIDO[^<\n]*)/g, '<span style="color:#fbbf24;font-weight:700">$1</span>')
     .replace(/(CANCELADO)/g, '<span style="color:#fbbf24;font-weight:700">$1</span>')
     .replace(/(CSI\w+)/g, '<span class="s-macro">$1</span>')
-    .replace(/(\[cole aqui\])/g, '<span style="color:#fbbf24;font-weight:700;background:rgba(251,191,36,.15);padding:1px 5px;border-radius:3px">$1</span>');
+    .replace(/^(Tags:)/gm, '<span style="color:#c084fc;font-weight:700">$1</span>')
+    .replace(/(\[CONFIRMED MO\]|\[VULNERABILITY\]|\[MALWARE\]|\[REMACCESS\]|\[DATAACCESS\]|\[PASSRESET\]|\[HABITUALIDADE\]|\[VULNERABLE CUSTOMER\]|\[PROJETO SWAT\]|\[PYRAMID\]|\[SOCIAL\]|\[MOTOBOY\]|\[WHATSAPP\]|\[INCOMPLETE\]|\[FRICTION\]|\[CHAT-TO-BYPASS\]|\[OTHERS\])/g, '<span style="background:#4c1d95;color:#e9d5ff;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:800;letter-spacing:.3px">$1</span>')
+    .replace(/^(⚙ .*)/gm, '<span style="color:#6b7280;font-size:12px">$1</span>')
+    .replace(/(cole_aqui)/g, '<span style="color:#fbbf24;font-weight:700;background:rgba(251,191,36,.15);padding:1px 5px;border-radius:3px">$1</span>');
 
   html += `<div class="script-section">`;
   html += `<div class="script-header">`;
@@ -1528,7 +1608,6 @@ function renderResult(result) {
   html += `<div class="script-body" id="script-body" contenteditable="true" spellcheck="false">${scriptHtml}</div>`;
   html += `</div>`;
 
-  // Observação Interna (BPO)
   const obs = getObservacaoInterna(answers);
   if (obs) {
     const obsHtml = obs.text
@@ -1555,7 +1634,7 @@ function renderResult(result) {
     html += `</div>`;
   }
   if (result.registro && result.registro.length) {
-    html += `<div class="registro-info"><div class="notes-title">📝 Registro no Marte/Pelúcio:</div>`;
+    html += `<div class="registro-info"><div class="notes-title">📝 Registro no Marte:</div>`;
     result.registro.forEach(n => { html += `<div class="note-item">${n}</div>`; });
     html += `</div>`;
   }
@@ -1587,7 +1666,6 @@ function legacyCopy(text) {
       ta.style.opacity = '0';
       ta.style.pointerEvents = 'none';
       document.body.appendChild(ta);
-      // Preserve current selection
       const sel = document.getSelection();
       const savedRange = sel && sel.rangeCount > 0 ? sel.getRangeAt(0) : null;
       ta.focus();
@@ -1595,7 +1673,6 @@ function legacyCopy(text) {
       ta.setSelectionRange(0, text.length);
       const ok = document.execCommand('copy');
       document.body.removeChild(ta);
-      // Restore selection
       if (savedRange && sel) { sel.removeAllRanges(); sel.addRange(savedRange); }
       ok ? resolve() : reject(new Error('execCommand returned false'));
     } catch (e) { reject(e); }
@@ -1603,7 +1680,6 @@ function legacyCopy(text) {
 }
 
 function copyToClipboard(text) {
-  // Try modern API first; if it rejects, fall back to execCommand
   if (navigator.clipboard && window.isSecureContext) {
     return navigator.clipboard.writeText(text).catch(() => legacyCopy(text));
   }
@@ -1727,6 +1803,15 @@ function resetAll() {
 }
 
 render();
+
+document.addEventListener('paste', function(e) {
+  const el = e.target;
+  if (el.isContentEditable) {
+    e.preventDefault();
+    const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+    document.execCommand('insertText', false, text);
+  }
+});
 </script>
 </body>
 </html>
