@@ -213,6 +213,51 @@
   .obs-body[contenteditable="true"]:focus{box-shadow:inset 0 0 0 2px rgba(245,158,11,.4)}
 
   .hidden{display:none}
+
+  /* Bloco de Notas flutuante */
+  .notepad-fab{
+    position:fixed;bottom:28px;right:20px;
+    width:48px;height:48px;border-radius:50%;
+    background:linear-gradient(135deg,#7c3aed,#6d28d9);
+    border:none;cursor:pointer;box-shadow:0 4px 16px rgba(124,58,237,.4);
+    display:flex;align-items:center;justify-content:center;
+    font-size:20px;transition:all .2s;z-index:1000;
+  }
+  .notepad-fab:hover{transform:scale(1.08);box-shadow:0 6px 20px rgba(124,58,237,.5)}
+  .notepad-panel{
+    position:fixed;bottom:88px;right:20px;
+    width:320px;background:#1a1a2e;border-radius:16px;
+    box-shadow:0 8px 32px rgba(0,0,0,.4);border:1px solid #4a3f6b;
+    z-index:999;transition:all .25s ease;
+    transform-origin:bottom right;
+  }
+  .notepad-panel.hidden-panel{
+    opacity:0;transform:scale(.9) translateY(10px);pointer-events:none;
+  }
+  .notepad-panel-header{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:12px 16px;background:#16213e;border-radius:16px 16px 0 0;
+    border-bottom:1px solid #4a3f6b;
+  }
+  .notepad-panel-title{font-size:13px;font-weight:700;color:#a78bfa;display:flex;align-items:center;gap:6px}
+  .notepad-actions{display:flex;gap:6px}
+  .notepad-action-btn{
+    display:inline-flex;align-items:center;gap:4px;padding:5px 10px;
+    border:none;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;transition:all .2s;
+  }
+  .notepad-copy-btn{background:#7c3aed;color:#fff}
+  .notepad-copy-btn:hover{background:#6d28d9}
+  .notepad-copy-btn.copied{background:#22c55e}
+  .notepad-clear-btn{background:rgba(239,68,68,.15);color:#f87171}
+  .notepad-clear-btn:hover{background:rgba(239,68,68,.25)}
+  .notepad-textarea{
+    width:100%;height:220px;background:transparent;border:none;outline:none;
+    padding:14px 16px;resize:none;
+    font-family:'Cascadia Code','Fira Code','Consolas',monospace;
+    font-size:12.5px;line-height:1.7;color:#e5e7eb;
+    border-radius:0 0 16px 16px;
+  }
+  .notepad-textarea::placeholder{color:#4b5563}
 </style>
 </head>
 <body>
@@ -231,6 +276,19 @@
   <button class="reset-btn hidden" id="reset-btn" onclick="resetAll()">🔄 Nova consulta</button>
 </div>
 <div class="toast" id="toast"></div>
+
+<!-- Bloco de Notas flutuante -->
+<div class="notepad-panel hidden-panel" id="notepad-panel">
+  <div class="notepad-panel-header">
+    <span class="notepad-panel-title">📝 Bloco de Notas</span>
+    <div class="notepad-actions">
+      <button class="notepad-action-btn notepad-copy-btn" id="notepad-copy-btn" onclick="copyNotepad()">📋 Copiar</button>
+      <button class="notepad-action-btn notepad-clear-btn" onclick="clearNotepad()">🗑 Limpar</button>
+    </div>
+  </div>
+  <textarea class="notepad-textarea" id="notepad-textarea" placeholder="Cole aqui as informações do caso enquanto analisa...&#10;&#10;Ex: ID do incidente, transações, observações..."></textarea>
+</div>
+<button class="notepad-fab" id="notepad-fab" onclick="toggleNotepad()" title="Bloco de Notas">📝</button>
 
 <script>
 const MACROS_DB = {
@@ -1063,7 +1121,7 @@ function renderStep(stepKey, stepNum) {
 function getTagsMarte(a) {
   const tags = [];
   const hints = [];
-  const skip = ["desacordo","pix_errado","cancelamento","boleto_consumo","chip_replay"];
+  const skip = ["ato","desacordo","pix_errado","cancelamento","boleto_consumo","chip_replay"];
   if (skip.includes(a.tipo_incidente)) return null;
 
   const isAcatado =
@@ -1803,6 +1861,46 @@ function resetAll() {
 }
 
 render();
+
+// ── Bloco de Notas ──
+const NOTEPAD_KEY = 'csi_notepad';
+let notepadOpen = false;
+
+function toggleNotepad() {
+  notepadOpen = !notepadOpen;
+  const panel = document.getElementById('notepad-panel');
+  const fab   = document.getElementById('notepad-fab');
+  panel.classList.toggle('hidden-panel', !notepadOpen);
+  fab.textContent = notepadOpen ? '✕' : '📝';
+  if (notepadOpen) document.getElementById('notepad-textarea').focus();
+}
+
+function copyNotepad() {
+  const text = document.getElementById('notepad-textarea').value;
+  if (!text.trim()) { showToast('⚠️ Bloco de notas vazio.'); return; }
+  copyToClipboard(text).then(() => {
+    const btn = document.getElementById('notepad-copy-btn');
+    btn.textContent = '✅ Copiado!';
+    btn.classList.add('copied');
+    showToast('✅ Notas copiadas!');
+    setTimeout(() => { btn.textContent = '📋 Copiar'; btn.classList.remove('copied'); }, 2000);
+  }).catch(() => showToast('⚠️ Não foi possível copiar.'));
+}
+
+function clearNotepad() {
+  if (!confirm('Limpar o bloco de notas?')) return;
+  document.getElementById('notepad-textarea').value = '';
+  localStorage.removeItem(NOTEPAD_KEY);
+}
+
+// Persistência automática no localStorage
+(function initNotepad() {
+  const saved = localStorage.getItem(NOTEPAD_KEY);
+  if (saved) document.getElementById('notepad-textarea').value = saved;
+  document.getElementById('notepad-textarea').addEventListener('input', function() {
+    localStorage.setItem(NOTEPAD_KEY, this.value);
+  });
+})();
 
 document.addEventListener('paste', function(e) {
   const el = e.target;
