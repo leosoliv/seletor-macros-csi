@@ -294,7 +294,7 @@
   </div>
 
   <div class="alert-banner" id="alert-banner">
-    <button class="alert-banner-close" onclick="dismissAlert()" title="Fechar aviso">✕</button>
+    <button class="alert-banner-close" onclick="dismissAlert()" title="Fechar por agora">✕</button>
     <div class="alert-banner-title">🚨 Novo M.O. — ATO &amp; Fraudulent Access (App Cloned)</div>
     <div class="alert-banner-body">
       Antes de negar um caso de <b>ATO/Acesso Fraudulento</b>, confira o Widget <b>Challenge Platform</b> (use CTRL+F e busque "App Cloned") olhando a data próxima à transação.
@@ -1906,14 +1906,8 @@ function resetAll() {
 render();
 
 // ── Banner de alerta (App Cloned) ──
-const ALERT_KEY = 'csi_alert_appcloned_dismissed';
-(function initAlert() {
-  const banner = document.getElementById('alert-banner');
-  if (banner && localStorage.getItem(ALERT_KEY) === '1') banner.classList.add('hidden-banner');
-})();
 function dismissAlert() {
   document.getElementById('alert-banner').classList.add('hidden-banner');
-  localStorage.setItem(ALERT_KEY, '1');
 }
 
 // ── Bloco de Notas ──
