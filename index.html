@@ -125,6 +125,27 @@
   }
   .reset-btn:hover{border-color:#7c3aed;color:#7c3aed}
 
+  .alert-banner{
+    position:relative;background:linear-gradient(135deg,#fef2f2,#fee2e2);
+    border:2px solid #ef4444;border-radius:14px;padding:16px 40px 16px 18px;
+    margin-bottom:20px;animation:fadeIn .3s ease;
+  }
+  .alert-banner-title{
+    display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:800;
+    color:#b91c1c;letter-spacing:.3px;margin-bottom:6px;text-transform:uppercase;
+  }
+  .alert-banner-body{font-size:13px;color:#7f1d1d;line-height:1.55}
+  .alert-banner-body b{color:#991b1b}
+  .alert-banner-body ol{margin:6px 0 0 18px;padding:0}
+  .alert-banner-body li{margin-bottom:2px}
+  .alert-banner-close{
+    position:absolute;top:12px;right:12px;width:26px;height:26px;border-radius:8px;
+    border:none;background:rgba(239,68,68,.12);color:#b91c1c;cursor:pointer;
+    font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;
+  }
+  .alert-banner-close:hover{background:rgba(239,68,68,.22)}
+  .alert-banner.hidden-banner{display:none}
+
   .macro-code-wrap{display:flex;align-items:center;gap:6px}
   .copy-btn{
     display:inline-flex;align-items:center;justify-content:center;
@@ -271,6 +292,22 @@
     <h1>Seletor de Macros</h1>
     <p class="subtitle">Responda as perguntas e descubra quais macros usar no posicionamento</p>
   </div>
+
+  <div class="alert-banner" id="alert-banner">
+    <button class="alert-banner-close" onclick="dismissAlert()" title="Fechar aviso">✕</button>
+    <div class="alert-banner-title">🚨 Novo M.O. — ATO &amp; Fraudulent Access (App Cloned)</div>
+    <div class="alert-banner-body">
+      Antes de negar um caso de <b>ATO/Acesso Fraudulento</b>, confira o Widget <b>Challenge Platform</b> (use CTRL+F e busque "App Cloned") olhando a data próxima à transação.
+      <br><br>
+      Se encontrar esse evento, <b>NÃO finalize o caso</b>:
+      <ol>
+        <li>Deixe o caso em <b>Ação Solicitada</b></li>
+        <li>Use a macro <b>CSS2 - CSS - CSI STATUS - Em análise</b></li>
+        <li>Escale para o <b>2nd Level</b> via Jira, com print do evento anexado</li>
+      </ol>
+    </div>
+  </div>
+
   <div class="steps" id="steps-container"></div>
   <div class="hidden" id="result-section"></div>
   <button class="reset-btn hidden" id="reset-btn" onclick="resetAll()">🔄 Nova consulta</button>
@@ -432,12 +469,12 @@ const STEPS = {
     options:[
       {label:"Falso Call Center",value:"fake_callcenter",desc:"Fraudador finge ser do Nubank ou outra IF — elegível à política de reembolso"},
       {label:"Engenharia Social (conhecido/parente)",value:"eng_social",desc:"Fraudador finge ser amigo/familiar — EXCLUÍDO da política"},
-      {label:"Site Falso / Loja Falsa / Phishing",value:"site_falso",desc:"Site falso ou vendedor ilegítimo — EXCLUÍDO da política"},
+      {label:"Falso Advogado",value:"falso_advogado",desc:"Fraudador finge ser advogado/despachante — EXCLUÍDO da política"},
+      {label:"Site Falso / Loja Falsa / Compra Falsa / Phishing",value:"site_falso",desc:"Site falso, vendedor ilegítimo ou produto nunca entregue — EXCLUÍDO da política"},
       {label:"Esquema de Pirâmide",value:"piramide",desc:"Falsos investimentos ou plataformas de retorno — EXCLUÍDO da política"},
       {label:"Empréstimo Falso",value:"emprestimo_falso",desc:"Taxa para liberação de empréstimo falso — EXCLUÍDO da política"},
       {label:"Falso Leilão",value:"falso_leilao",desc:"Leilão falso de produtos/veículos — EXCLUÍDO da política"},
       {label:"Social Media (Marketplace/Redes)",value:"social_media",desc:"Venda de produtos via redes sociais — EXCLUÍDO da política"},
-      {label:"Compra Falsa",value:"compra_falsa",desc:"Produto inexistente ou nunca entregue — EXCLUÍDO da política"},
       {label:"Pagamento de taxa para prêmios",value:"taxa_premio",desc:"Falso prêmio com taxa de liberação — EXCLUÍDO da política"},
       {label:"Boleto/Código de barras adulterado",value:"boleto_adulterado",desc:"Boleto falso ou código adulterado — EXCLUÍDO da política"},
       {label:"Motoboy",value:"motoboy",desc:"Entrega de cartão a motoboy falso — EXCLUÍDO da política"},
@@ -612,7 +649,7 @@ function getNextStep(cs, v, a) {
     return "status_recuperacao_golpe";
   }
   if (cs === "misto_tipos_golpe") return v.includes('mgx_emprestimo') ? "emprestimo_decisao" : "status_recuperacao_golpe";
-  if (cs === "status_recuperacao_golpe") return "triangulacao";
+  if (cs === "status_recuperacao_golpe") return "transacao_financiada";
   if (cs === "golpe_conta_nu_saldo") return "triangulacao";
   if (cs === "golpe_nupay_tipo") return "golpe_nupay_decisao";
   if (cs === "golpe_nupay_decisao") return a.golpe_nupay_tipo === "pj_golpe" ? "golpe_nupay_pj_conta" : "tem_crypto";
@@ -768,18 +805,19 @@ function getMacroResult(a) {
 
   const MO_LABELS = {
     fake_callcenter:"Falso Call Center",eng_social:"Engenharia Social (conhecido/parente)",
-    site_falso:"Site Falso / Loja Falsa / Phishing",piramide:"Esquema de Pirâmide",
+    falso_advogado:"Falso Advogado",
+    site_falso:"Site Falso / Loja Falsa / Compra Falsa / Phishing",piramide:"Esquema de Pirâmide",
     emprestimo_falso:"Empréstimo Falso",falso_leilao:"Falso Leilão",
-    social_media:"Social Media (Marketplace/Redes)",compra_falsa:"Compra Falsa",
+    social_media:"Social Media (Marketplace/Redes)",
     taxa_premio:"Pagamento de taxa para prêmios",boleto_adulterado:"Boleto/Código de barras adulterado",
     motoboy:"Motoboy",reporte_incompleto:"Reporte incompleto/inconsistente",outro_golpe:"Outro"
   };
-  const MO_EXCLUIDOS = ["eng_social","site_falso","piramide","emprestimo_falso","falso_leilao","social_media","compra_falsa","taxa_premio","boleto_adulterado","motoboy","reporte_incompleto"];
+  const MO_EXCLUIDOS = ["eng_social","falso_advogado","site_falso","piramide","emprestimo_falso","falso_leilao","social_media","taxa_premio","boleto_adulterado","motoboy","reporte_incompleto"];
   const MO_SUBMOTIVOS = {
     fake_callcenter:"Verificação de segurança de novos produtos (Fake Call Center)",
-    eng_social:"Engenharia social",site_falso:"Loja falsa",piramide:"Esquema de pirâmide",
+    eng_social:"Engenharia social",falso_advogado:"Engenharia social",site_falso:"Loja falsa",piramide:"Esquema de pirâmide",
     emprestimo_falso:"Empréstimo falso",falso_leilao:"Leilão falso",social_media:"Mídias sociais",
-    compra_falsa:"Loja falsa",taxa_premio:"Loja falsa",boleto_adulterado:"Código de barras adulterado",
+    taxa_premio:"Loja falsa",boleto_adulterado:"Código de barras adulterado",
     motoboy:"Motoboy",reporte_incompleto:"Relato parcial",outro_golpe:"Outros"
   };
   const moLabel = MO_LABELS[a.tipo_golpe] || "Não informado";
@@ -916,6 +954,10 @@ function getMacroResult(a) {
     if (a.tipo_transacao_golpe !== "nupay_golpe" && a.triangulacao === "sim") {
       macros.push(MACROS_DB.CSIAPX08);
       notes.push("Orientar cliente a registrar solicitação na outra IF. Não cancelar MED.");
+    }
+    if (a.transacao_financiada === "sim") {
+      macros.push(MACROS_DB.CSIAPX09_TENT);
+      notes.push("Transação financiada (Pix/Boleto no crédito): macro apêndice de tentativa de recuperação adicionada.");
     }
 
     if (a.tem_crypto === "sim") {
@@ -1158,13 +1200,13 @@ function getTagsMarte(a) {
       piramide:           "[PYRAMID]",
       site_falso:         "[SOCIAL]",
       social_media:       "[SOCIAL]",
-      compra_falsa:       "[SOCIAL]",
       falso_leilao:       "[SOCIAL]",
       taxa_premio:        "[SOCIAL]",
       boleto_adulterado:  "[SOCIAL]",
       emprestimo_falso:   "[SOCIAL]",
       motoboy:            "[MOTOBOY]",
       eng_social:         "[WHATSAPP]",
+      falso_advogado:     "[FAKE-LAWYER]",
       reporte_incompleto: "[INCOMPLETE]",
       fake_callcenter:    "[OTHERS]",
       outro_golpe:        "[OTHERS]"
@@ -1293,7 +1335,7 @@ function generateScript(a, result) {
     lines.push("ANÁLISE: Cliente relata ter sido vítima de golpe.");
     lines.push("");
 
-    const MO_EXCLUIDOS_SCRIPT = ["eng_social","site_falso","piramide","emprestimo_falso","falso_leilao","social_media","compra_falsa","taxa_premio","boleto_adulterado","motoboy","reporte_incompleto"];
+    const MO_EXCLUIDOS_SCRIPT = ["eng_social","falso_advogado","site_falso","piramide","emprestimo_falso","falso_leilao","social_media","taxa_premio","boleto_adulterado","motoboy","reporte_incompleto"];
     const moExcluidoScript = MO_EXCLUIDOS_SCRIPT.includes(a.tipo_golpe);
     lines.push("Verificação de vulnerabilidades:");
     lines.push("- Sem indícios de vulnerabilidade explorada (malware/acesso remoto/liveness/LGPD).");
@@ -1355,6 +1397,7 @@ function generateScript(a, result) {
     }
 
     if (a.triangulacao === "sim") lines.push("- Triangulação identificada. Cliente orientado a registrar na outra IF. MED mantido.");
+    if (a.transacao_financiada === "sim") lines.push("- Transação financiada (Pix/Boleto no crédito). Macro apêndice de tentativa de recuperação (CSIAPX09) adicionada.");
     if (a.tem_crypto === "sim") lines.push("- Transações de criptomoeda envolvidas. Macro apêndice CSIAPX15 adicionada.");
     lines.push("");
     lines.push(`Decisão: NEGADO`);
@@ -1654,7 +1697,7 @@ function renderResult(result) {
     .replace(/(CANCELADO)/g, '<span style="color:#fbbf24;font-weight:700">$1</span>')
     .replace(/(CSI\w+)/g, '<span class="s-macro">$1</span>')
     .replace(/^(Tags:)/gm, '<span style="color:#c084fc;font-weight:700">$1</span>')
-    .replace(/(\[CONFIRMED MO\]|\[VULNERABILITY\]|\[MALWARE\]|\[REMACCESS\]|\[DATAACCESS\]|\[PASSRESET\]|\[HABITUALIDADE\]|\[VULNERABLE CUSTOMER\]|\[PROJETO SWAT\]|\[PYRAMID\]|\[SOCIAL\]|\[MOTOBOY\]|\[WHATSAPP\]|\[INCOMPLETE\]|\[FRICTION\]|\[CHAT-TO-BYPASS\]|\[OTHERS\])/g, '<span style="background:#4c1d95;color:#e9d5ff;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:800;letter-spacing:.3px">$1</span>')
+    .replace(/(\[CONFIRMED MO\]|\[VULNERABILITY\]|\[MALWARE\]|\[REMACCESS\]|\[DATAACCESS\]|\[PASSRESET\]|\[HABITUALIDADE\]|\[VULNERABLE CUSTOMER\]|\[PROJETO SWAT\]|\[PYRAMID\]|\[SOCIAL\]|\[MOTOBOY\]|\[WHATSAPP\]|\[FAKE-LAWYER\]|\[INCOMPLETE\]|\[FRICTION\]|\[CHAT-TO-BYPASS\]|\[OTHERS\])/g, '<span style="background:#4c1d95;color:#e9d5ff;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:800;letter-spacing:.3px">$1</span>')
     .replace(/^(⚙ .*)/gm, '<span style="color:#6b7280;font-size:12px">$1</span>')
     .replace(/(cole_aqui)/g, '<span style="color:#fbbf24;font-weight:700;background:rgba(251,191,36,.15);padding:1px 5px;border-radius:3px">$1</span>');
 
@@ -1862,6 +1905,17 @@ function resetAll() {
 
 render();
 
+// ── Banner de alerta (App Cloned) ──
+const ALERT_KEY = 'csi_alert_appcloned_dismissed';
+(function initAlert() {
+  const banner = document.getElementById('alert-banner');
+  if (banner && localStorage.getItem(ALERT_KEY) === '1') banner.classList.add('hidden-banner');
+})();
+function dismissAlert() {
+  document.getElementById('alert-banner').classList.add('hidden-banner');
+  localStorage.setItem(ALERT_KEY, '1');
+}
+
 // ── Bloco de Notas ──
 const NOTEPAD_KEY = 'csi_notepad';
 let notepadOpen = false;
@@ -1888,7 +1942,6 @@ function copyNotepad() {
 }
 
 function clearNotepad() {
-  if (!confirm('Limpar o bloco de notas?')) return;
   document.getElementById('notepad-textarea').value = '';
   localStorage.removeItem(NOTEPAD_KEY);
 }
