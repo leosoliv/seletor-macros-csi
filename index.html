@@ -395,15 +395,15 @@ const STEPS = {
     question:"Qual é o tipo principal de transação?", icon:"💳",
     options:[
       {label:"PIX",value:"pix",desc:"Transferência via PIX"},
-      {label:"Débito / Crédito / Boleto outra IF",value:"carta",desc:"Requer Carta de Compromisso"},
+      {label:"Débito/Crédito/Boleto outra IF",value:"carta",desc:"Requer Carta de Compromisso"},
       {label:"Boleto Nubank",value:"boleto_nu",desc:"Boleto emitido pelo Nubank"},
       {label:"WhatsApp Pay",value:"whatsapp",desc:"Pagamento via WhatsApp"},
       {label:"PIX via WhatsApp",value:"pix_whatsapp",desc:"PIX pelo WhatsApp (sem Serial ID)"},
       {label:"NuPay",value:"nupay",desc:"NuPay for PJ / Business / Gift Card"},
       {label:"Recarga / Saque ATM",value:"recarga_saque",desc:"Estabelecimentos confiáveis"},
       {label:"Conta Nu (beneficiário)",value:"conta_nu",desc:"Transação entre contas Nu"},
-      {label:"Misto (vários tipos)",value:"misto",desc:"Combina diferentes transações"},
       {label:"Empréstimo",value:"emprestimo",desc:"Contratação fraudulenta de empréstimo"},
+      {label:"Misto (vários tipos)",value:"misto",desc:"Combina diferentes transações"},
     ]
   },
   status_recuperacao: {
@@ -504,15 +504,15 @@ const STEPS = {
     question:"Qual é o tipo principal de transação?", icon:"💳",
     options:[
       {label:"PIX",value:"pix_golpe",desc:"MED disparado automaticamente"},
-      {label:"Débito / Crédito / Boleto outra IF",value:"carta_golpe",desc:"Requer Carta de Compromisso"},
+      {label:"Débito/Crédito/Boleto outra IF",value:"carta_golpe",desc:"Requer Carta de Compromisso"},
       {label:"Boleto Nubank",value:"boleto_nu_golpe",desc:"Contestar no Widget de Boletos"},
       {label:"WhatsApp Pay",value:"whatsapp_golpe",desc:"Contestação via Meta (WhatsApp)"},
       {label:"PIX via WhatsApp",value:"pix_whatsapp_golpe",desc:"Sem Serial ID — negar sumariamente"},
       {label:"NuPay",value:"nupay_golpe",desc:"NuPay for PJ / Business / Gift Card"},
       {label:"Recarga / Saque ATM",value:"recarga_saque_golpe",desc:"Estabelecimentos confiáveis — sem recuperação"},
       {label:"Conta Nu (beneficiário)",value:"conta_nu_golpe",desc:"Transação entre contas Nu"},
-      {label:"Misto (vários tipos)",value:"misto_golpe",desc:"Combina diferentes transações"},
       {label:"Empréstimo",value:"emprestimo_golpe",desc:"Contratação fraudulenta de empréstimo"},
+      {label:"Misto (vários tipos)",value:"misto_golpe",desc:"Combina diferentes transações"},
     ]
   },
   golpe_conta_nu_saldo: {
@@ -563,9 +563,10 @@ const STEPS = {
     multiSelect: true,
     options:[
       {label:"PIX",value:"mx_pix",desc:"Transferência via PIX"},
-      {label:"Débito / Crédito / Boleto outra IF",value:"mx_carta",desc:"Requer Carta de Compromisso"},
+      {label:"Débito/Crédito/Boleto outra IF",value:"mx_carta",desc:"Requer Carta de Compromisso"},
       {label:"Boleto Nubank",value:"mx_boleto_nu",desc:"Boleto emitido pelo Nubank"},
       {label:"WhatsApp Pay",value:"mx_whatsapp",desc:"Pagamento via WhatsApp"},
+      {label:"PIX via WhatsApp",value:"mx_pixwpp",desc:"Sem Serial ID — negar sumariamente"},
       {label:"NuPay",value:"mx_nupay",desc:"NuPay for PJ / Business / Gift Card"},
       {label:"Conta Nu (beneficiário)",value:"mx_conta_nu",desc:"Transação entre contas Nu"},
       {label:"Empréstimo",value:"mx_emprestimo",desc:"Contratação de empréstimo fraudulenta"},
@@ -579,9 +580,10 @@ const STEPS = {
     multiSelect: true,
     options:[
       {label:"PIX",value:"mgx_pix",desc:"MED disparado automaticamente"},
-      {label:"Débito / Crédito / Boleto outra IF",value:"mgx_carta",desc:"Requer Carta de Compromisso"},
+      {label:"Débito/Crédito/Boleto outra IF",value:"mgx_carta",desc:"Requer Carta de Compromisso"},
       {label:"Boleto Nubank",value:"mgx_boleto_nu",desc:"Contestar no Widget de Boletos"},
       {label:"WhatsApp Pay",value:"mgx_whatsapp",desc:"Contestação via Meta"},
+      {label:"PIX via WhatsApp",value:"mgx_pixwpp",desc:"Sem Serial ID — negar sumariamente"},
       {label:"NuPay",value:"mgx_nupay",desc:"NuPay for PJ / Business / Gift Card"},
       {label:"Conta Nu (beneficiário)",value:"mgx_conta_nu",desc:"Transação entre contas Nu"},
       {label:"Empréstimo",value:"mgx_emprestimo",desc:"Contratação de empréstimo fraudulenta"},
@@ -633,6 +635,15 @@ function getNextStep(cs, v, a) {
   }
   if (cs === "decisao_chip_replay") return null;
   if (cs === "pix_prazo") {
+    if (a.misto_tipos_golpe || a.misto_tipos) {
+      const isGolpe = !!a.misto_tipos_golpe;
+      const raw = isGolpe ? a.misto_tipos_golpe : a.misto_tipos;
+      const prefix = isGolpe ? 'mgx_' : 'mx_';
+      const sub = nextMistoSubStep(prefix, raw, a, isGolpe);
+      if (sub) return sub;
+      if (raw.includes(prefix + 'emprestimo')) return "emprestimo_decisao";
+      return isGolpe ? "status_recuperacao_golpe" : "status_recuperacao";
+    }
     if (a.tipo_incidente === "golpe") return "status_recuperacao_golpe";
     return "status_recuperacao";
   }
@@ -648,12 +659,38 @@ function getNextStep(cs, v, a) {
     if (v === "emprestimo_golpe") return "emprestimo_decisao";
     return "status_recuperacao_golpe";
   }
-  if (cs === "misto_tipos_golpe") return v.includes('mgx_emprestimo') ? "emprestimo_decisao" : "status_recuperacao_golpe";
+  if (cs === "misto_tipos_golpe") {
+    const sub = nextMistoSubStep('mgx_', v, a, true);
+    if (sub) return sub;
+    return v.includes('mgx_emprestimo') ? "emprestimo_decisao" : "status_recuperacao_golpe";
+  }
   if (cs === "status_recuperacao_golpe") return "transacao_financiada";
-  if (cs === "golpe_conta_nu_saldo") return "triangulacao";
+  if (cs === "golpe_conta_nu_saldo") {
+    if (a.misto_tipos_golpe) {
+      const sub = nextMistoSubStep('mgx_', a.misto_tipos_golpe, a, true);
+      if (sub) return sub;
+      return a.misto_tipos_golpe.includes('mgx_emprestimo') ? "emprestimo_decisao" : "status_recuperacao_golpe";
+    }
+    return "transacao_financiada";
+  }
   if (cs === "golpe_nupay_tipo") return "golpe_nupay_decisao";
-  if (cs === "golpe_nupay_decisao") return a.golpe_nupay_tipo === "pj_golpe" ? "golpe_nupay_pj_conta" : "tem_crypto";
-  if (cs === "golpe_nupay_pj_conta") return "tem_crypto";
+  if (cs === "golpe_nupay_decisao") {
+    if (a.golpe_nupay_tipo === "pj_golpe") return "golpe_nupay_pj_conta";
+    if (a.misto_tipos_golpe) {
+      const sub = nextMistoSubStep('mgx_', a.misto_tipos_golpe, a, true);
+      if (sub) return sub;
+      return a.misto_tipos_golpe.includes('mgx_emprestimo') ? "emprestimo_decisao" : "status_recuperacao_golpe";
+    }
+    return "transacao_financiada";
+  }
+  if (cs === "golpe_nupay_pj_conta") {
+    if (a.misto_tipos_golpe) {
+      const sub = nextMistoSubStep('mgx_', a.misto_tipos_golpe, a, true);
+      if (sub) return sub;
+      return a.misto_tipos_golpe.includes('mgx_emprestimo') ? "emprestimo_decisao" : "status_recuperacao_golpe";
+    }
+    return "transacao_financiada";
+  }
   if (cs === "decisao_ato") return v === "acatado" ? "vulnerabilidade_ato" : "tipo_transacao_negado";
   if (cs === "vulnerabilidade_ato") {
     if (a.decisao_ato === "acatado") return "transacao_financiada";
@@ -680,14 +717,36 @@ function getNextStep(cs, v, a) {
     if (fromMisto) return a.tipo_incidente === "golpe" ? "status_recuperacao_golpe" : "status_recuperacao";
     return null;
   }
-  if (cs === "misto_tipos") return v.includes('mx_emprestimo') ? "emprestimo_decisao" : "status_recuperacao";
+  if (cs === "misto_tipos") {
+    const sub = nextMistoSubStep('mx_', v, a, false);
+    if (sub) return sub;
+    return v.includes('mx_emprestimo') ? "emprestimo_decisao" : "status_recuperacao";
+  }
   if (cs === "nupay_tipo") return "nupay_decisao";
-  if (cs === "nupay_decisao") return a.nupay_tipo === "pj" ? "nupay_pj_conta" : null;
-  if (cs === "nupay_pj_conta") return null;
+  if (cs === "nupay_decisao") {
+    if (a.nupay_tipo === "pj") return "nupay_pj_conta";
+    if (a.misto_tipos) {
+      const sub = nextMistoSubStep('mx_', a.misto_tipos, a, false);
+      if (sub) return sub;
+      return a.misto_tipos.includes('mx_emprestimo') ? "emprestimo_decisao" : "status_recuperacao";
+    }
+    return null;
+  }
+  if (cs === "nupay_pj_conta") {
+    if (a.misto_tipos) {
+      const sub = nextMistoSubStep('mx_', a.misto_tipos, a, false);
+      if (sub) return sub;
+      return a.misto_tipos.includes('mx_emprestimo') ? "emprestimo_decisao" : "status_recuperacao";
+    }
+    return null;
+  }
   if (cs === "status_recuperacao") return "transacao_financiada";
   if (cs === "transacao_financiada") return "triangulacao";
   if (cs === "triangulacao") {
-    if (a.tipo_incidente === "golpe") return "tem_crypto";
+    const mistoJaTemCrypto =
+      (a.misto_tipos && a.misto_tipos.includes('mx_crypto')) ||
+      (a.misto_tipos_golpe && a.misto_tipos_golpe.includes('mgx_crypto'));
+    if (mistoJaTemCrypto) return null; // já sabemos que tem crypto, não precisa perguntar de novo
     return "tem_crypto";
   }
   if (cs === "tem_crypto") return null;
@@ -729,6 +788,124 @@ function getMistoNotes(tipos) {
   return n;
 }
 
+// Retorna, para UM tipo de transação dentro de um caso Misto, as linhas de detalhe
+// e as macros específicas dele — usado tanto no painel de notas quanto no Script de Análise,
+// pra garantir que os dois nunca fiquem dessincronizados de novo.
+function mistoComponentDetail(type, a, isGolpe) {
+  if (type === 'pix') {
+    if (a.pix_prazo === 'sim') {
+      const l = ["PIX: transação acima de 80 dias corridos. MED não aplicável (Res. BCB nº 103). Macro CSIMED02 adicionada para esta transação."];
+      return { noteLines: l, scriptLines: l, macros: [MACROS_DB.CSIMED02] };
+    }
+    const l = ["PIX: MED disparado automaticamente. Verificar Widget Infrações DICT/MED."];
+    return { noteLines: l, scriptLines: ["PIX: MED disparado automaticamente."], macros: [] };
+  }
+  if (type === 'carta') {
+    return {
+      noteLines: ["Débito/Crédito/Boleto outra IF: Carta de Compromisso gerada automaticamente. Débito >90 dias: sem carta."],
+      scriptLines: ["Débito/Crédito/Boleto outra IF: Carta de Compromisso enviada."],
+      macros: []
+    };
+  }
+  if (type === 'boleto_nu') {
+    return {
+      noteLines: ["Boleto Nubank: Contestar no Widget de Boletos. Verificar status: Aceito / Revertido / Processando."],
+      scriptLines: ["Boleto Nubank: Contestação realizada no Widget de Boletos."],
+      macros: []
+    };
+  }
+  if (type === 'whatsapp') { const l = ["WhatsApp Pay: sem possibilidade de recuperação por CSI. Cliente orientado a contestar junto ao WhatsApp (Meta)."]; return { noteLines: l, scriptLines: l, macros: [] }; }
+  if (type === 'pixwpp') { const l = ["PIX via WhatsApp: negado sumariamente para esta transação. Sem Serial ID disponível pela Meta."]; return { noteLines: l, scriptLines: l, macros: [] }; }
+  if (type === 'cashin') {
+    return {
+      noteLines: ["Cash-in Financing: reembolso desabilitado para transações de cash-in. Ajustar manualmente se necessário."],
+      scriptLines: ["Cash-in Financing: reembolso desabilitado por padrão para esta transação."],
+      macros: []
+    };
+  }
+  if (type === 'recarga') { const l = ["Recarga/Saque ATM: estabelecimentos confiáveis, sem tentativa de recuperação."]; return { noteLines: l, scriptLines: l, macros: [] }; }
+  if (type === 'crypto') {
+    const l = ["Criptomoeda: sem tentativa de recuperação. Negativa direta com apêndice CSIAPX15."];
+    return { noteLines: l, scriptLines: l, macros: [MACROS_DB.CSIAPX15] };
+  }
+  if (type === 'emprestimo') return { noteLines: [], scriptLines: [], macros: [] }; // tratado à parte (pergunta própria de decisão/prazo)
+
+  if (type === 'nupay') {
+    const tipoKey = isGolpe ? a.golpe_nupay_tipo : a.nupay_tipo;
+    const decisaoKey = isGolpe ? a.golpe_nupay_decisao : a.nupay_decisao;
+    const pjContaKey = isGolpe ? a.golpe_nupay_pj_conta : a.nupay_pj_conta;
+    if (!tipoKey) { const l = ["NuPay: verificar modalidade (PJ/Business/Gift Card) e seguir fluxo específico."]; return { noteLines: l, scriptLines: l, macros: [] }; }
+    const nupayLabels = { pj:"NuPay for PJ", pj_golpe:"NuPay for PJ", business:"NuPay for Business", business_golpe:"NuPay for Business", gift:"NuPay Gift Card (Epay)", gift_golpe:"NuPay Gift Card (Epay)" };
+    const lines = [`NuPay (${nupayLabels[tipoKey] || tipoKey}):`];
+    const macros = [];
+    const isGift = tipoKey === 'gift' || tipoKey === 'gift_golpe';
+    const isBusiness = tipoKey === 'business' || tipoKey === 'business_golpe';
+    const isPJ = tipoKey === 'pj' || tipoKey === 'pj_golpe';
+    if (isGift) {
+      macros.push(decisaoKey === 'acatado' ? MACROS_DB.CSIG03 : MACROS_DB.CSIGRL07_GF);
+      if (decisaoKey === 'acatado') macros.push(MACROS_DB.CSIAPX17);
+      lines.push("Gift Card Epay: sem fluxo de estorno ou recuperação. Não orientar cliente a buscar o estabelecimento.");
+    } else if (isBusiness) {
+      macros.push(decisaoKey === 'acatado' ? MACROS_DB.CSIG03 : MACROS_DB.CSIGRL07_TK);
+      if (decisaoKey === 'acatado') macros.push(MACROS_DB.CSIAPX17);
+      lines.push("NuPay for Business: sem tentativa de recuperação. NÃO reportar conta do recebedor.");
+    } else if (isPJ) {
+      if (decisaoKey === 'acatado') {
+        macros.push(MACROS_DB.CSIG03, MACROS_DB.CSIAPX17);
+        lines.push(pjContaKey === 'sim' ? "Conta Nu do recebedor identificada. Seguir fluxo de Contas Nu para recuperação." : "Sem conta Nu do recebedor. Sem recuperação possível.");
+      } else {
+        macros.push(MACROS_DB.CSIGRL07_NT);
+        lines.push(pjContaKey === 'sim' ? "Conta Nu do recebedor identificada. Seguir fluxo de Contas Nu para tentativa de recuperação." : "Sem conta Nu do recebedor. Sem recuperação possível.");
+      }
+      lines.push("NuPay for PJ: sempre reportar conta do recebedor para análise de Inv. Ops.");
+    }
+    return { noteLines: lines, scriptLines: lines, macros };
+  }
+
+  if (type === 'conta_nu') {
+    if (!isGolpe) {
+      const l = ["Conta Nu: verificar status do reporte de fraude (vermelho/amarelo/cinza) e saldo no BKO. Comentário obrigatório: Csi-Scam-Victim || Customer__ID:"];
+      return { noteLines: l, scriptLines: l, macros: [] };
+    }
+    const s = a.golpe_conta_nu_saldo;
+    if (!s) { const l = ["Conta Nu: verificar status do reporte de fraude (vermelho/amarelo/cinza) e saldo no BKO."]; return { noteLines: l, scriptLines: l, macros: [] }; }
+    const msgs = {
+      vermelho_saldo: "Conta Nu: 🔴 Fraudador confirmado com saldo. Verificar TEC registrado ou abrir Jira T&C.",
+      vermelho_sem: "Conta Nu: 🔴 Fraudador confirmado, conta encerrada, sem saldo para recuperação.",
+      amarelo_saldo: "Conta Nu: 🟡 Em análise por L&O, saldo disponível. Recuperação em andamento.",
+      amarelo_sem: "Conta Nu: 🟡 Em análise por L&O, sem saldo para T&C realizar devolução.",
+      cinza: "Conta Nu: ⚪ Reporte arquivado. Comentário: Csi-Scam-Victim || Customer__ID:",
+      sem_reporte_saldo: "Conta Nu: 🔵 Sem reporte — abrir via Reportar Suspeito. Comentário: Csi-Scam-Victim || Customer__ID:",
+      sem_reporte_sem: "Conta Nu: 🔵 Sem reporte — abrir via Reportar Suspeito. Sem saldo para recuperação."
+    };
+    const comSaldo = ["vermelho_saldo","amarelo_saldo","sem_reporte_saldo"].includes(s);
+    const l = [msgs[s] || "Conta Nu: status verificado.", "Comentário obrigatório no Big Mama: Csi-Scam-Victim || Customer__ID:"];
+    return { noteLines: l, scriptLines: l, macros: [comSaldo ? MACROS_DB.CSIG00 : MACROS_DB.CSIG02] };
+  }
+
+  return { noteLines: [], scriptLines: [], macros: [] };
+}
+
+// Determina, dentro de um caso Misto, qual é a próxima sub-pergunta pendente
+// (PIX, NuPay ou Conta Nu — só quando esses tipos fazem parte da seleção)
+function nextMistoSubStep(prefix, raw, a, isGolpe) {
+  const tipos = parseMistoTipos(raw, prefix);
+  if (tipos.includes('pix') && a.pix_prazo === undefined) return 'pix_prazo';
+  if (tipos.includes('nupay')) {
+    if (isGolpe) {
+      if (a.golpe_nupay_tipo === undefined) return 'golpe_nupay_tipo';
+      if (a.golpe_nupay_decisao === undefined) return 'golpe_nupay_decisao';
+      if (a.golpe_nupay_tipo === 'pj_golpe' && a.golpe_nupay_pj_conta === undefined) return 'golpe_nupay_pj_conta';
+    } else {
+      if (a.nupay_tipo === undefined) return 'nupay_tipo';
+      if (a.nupay_decisao === undefined) return 'nupay_decisao';
+      if (a.nupay_tipo === 'pj' && a.nupay_pj_conta === undefined) return 'nupay_pj_conta';
+    }
+  }
+  if (isGolpe && tipos.includes('conta_nu') && a.golpe_conta_nu_saldo === undefined) return 'golpe_conta_nu_saldo';
+  return null;
+}
+
 function parseMistoTipos(raw, prefix) {
   if (!raw) return [];
   return raw.split(',').map(v => v.replace(prefix, ''));
@@ -744,7 +921,26 @@ function getMistoLabels(raw, stepKey) {
   });
 }
 
+// Remove macros duplicadas (mesmo código + nome + tipo) que podem surgir
+// quando um caso Misto empurra a macro geral de status E a macro específica
+// de um componente (ex: Conta Nu) que, por coincidência, é a mesma.
+function dedupeMacros(macros) {
+  const seen = new Set();
+  return macros.filter(m => {
+    const key = m.code + '|' + m.name + '|' + m.type;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function getMacroResult(a) {
+  const result = getMacroResultInner(a);
+  result.macros = dedupeMacros(result.macros);
+  return result;
+}
+
+function getMacroResultInner(a) {
   let macros = [], notes = [], registro = [];
 
   if (a.tipo_incidente === "desacordo") {
@@ -908,7 +1104,14 @@ function getMacroResult(a) {
         const tipos = parseMistoTipos(a.misto_tipos_golpe, 'mgx_');
         const labels = getMistoLabels(a.misto_tipos_golpe, 'misto_tipos_golpe');
         notes.push("Transações mistas: " + labels.join(' + '));
-        getMistoNotes(tipos.map(t => 'g' + t)).forEach(n => notes.push(n));
+        tipos.forEach(t => {
+          const detail = mistoComponentDetail(t, a, true);
+          detail.noteLines.forEach(l => notes.push(l));
+          detail.macros.forEach(m => macros.push(m));
+        });
+        if (a.golpe_nupay_decisao === "acatado") {
+          notes.push("⚠️ Este caso tem desfechos mistos: a parte de NuPay foi ACATADA (reembolso integral), enquanto as demais transações seguem NEGADAS. Envie as duas macros ao cliente, deixando claro qual se aplica a qual transação.");
+        }
         if (tipos.includes('emprestimo')) {
           if (a.emprestimo_decisao === "acatado") macros.push(MACROS_DB.CSIAPX01);
           else if (a.emprestimo_prazo === "ate7") macros.push(MACROS_DB.CSIAPX00_7D);
@@ -1073,7 +1276,14 @@ function getMacroResult(a) {
       const tipos = parseMistoTipos(a.misto_tipos, 'mx_');
       const labels = getMistoLabels(a.misto_tipos, 'misto_tipos');
       notes.push("Transações mistas: " + labels.join(' + '));
-      getMistoNotes(tipos).forEach(n => notes.push(n));
+      tipos.forEach(t => {
+        const detail = mistoComponentDetail(t, a, false);
+        detail.noteLines.forEach(l => notes.push(l));
+        detail.macros.forEach(m => macros.push(m));
+      });
+      if (a.nupay_decisao === "acatado") {
+        notes.push("⚠️ Este caso tem desfechos mistos: a parte de NuPay foi ACATADA (reembolso integral), enquanto as demais transações seguem NEGADAS. Envie as duas macros ao cliente, deixando claro qual se aplica a qual transação.");
+      }
       if (tipos.includes('emprestimo')) {
         if (a.emprestimo_decisao === "acatado") macros.push(MACROS_DB.CSIAPX01);
         else if (a.emprestimo_prazo === "ate7") macros.push(MACROS_DB.CSIAPX00_7D);
@@ -1208,15 +1418,23 @@ function getTagsMarte(a) {
       eng_social:         "[WHATSAPP]",
       falso_advogado:     "[FAKE-LAWYER]",
       reporte_incompleto: "[INCOMPLETE]",
-      fake_callcenter:    "[OTHERS]",
       outro_golpe:        "[OTHERS]"
+      // fake_callcenter: sem tag aqui — é adicionada direto no sistema
     };
     if (a.tipo_golpe && moTagMap[a.tipo_golpe]) tags.push(moTagMap[a.tipo_golpe]);
-    hints.push("Verificar se aplicável: [FRICTION] (ignorou barreiras do app) | [CHAT-TO-BYPASS] (pediu desbloqueio via chat)");
+    if (a.tipo_golpe !== "fake_callcenter") {
+      hints.push("Verificar se aplicável: [FRICTION] (ignorou barreiras do app) | [CHAT-TO-BYPASS] (pediu desbloqueio via chat)");
+    }
   }
 
   if (!tags.length && !hints.length) return null;
   return { tags, hints };
+}
+
+// Adiciona uma linha em branco só se a última linha já não for uma —
+// evita linhas em branco duplicadas quando várias partes do script tentam separar o mesmo trecho.
+function pushBlank(lines) {
+  if (lines.length && lines[lines.length - 1] !== "") lines.push("");
 }
 
 function generateScript(a, result) {
@@ -1226,7 +1444,7 @@ function generateScript(a, result) {
   // ═══ ATO NEGADO ═══
   if (a.tipo_incidente === "ato" && a.decisao_ato === "negado") {
     lines.push("ANÁLISE: Cliente relata não reconhecer transações.");
-    lines.push("");
+    pushBlank(lines);
 
     if (a.vulnerabilidade_ato === "malware") {
       if (a.malware_reincidente === "sim") {
@@ -1244,10 +1462,11 @@ function generateScript(a, result) {
       lines.push("- Sem eventos de risco (malware/acesso remoto).");
       lines.push("- Sem indícios de invasão de conta.");
     }
-    lines.push("");
+    pushBlank(lines);
 
     if (a.tipo_transacao_negado === "pix") {
       lines.push("Transações: PIX");
+      pushBlank(lines);
       if (a.pix_prazo === "sim") {
         lines.push("- Transação acima de 80 dias corridos. MED não aplicável (Res. BCB nº 103).");
         lines.push("- Macro CSIMED02 enviada ao cliente.");
@@ -1256,49 +1475,74 @@ function generateScript(a, result) {
       }
     } else if (a.tipo_transacao_negado === "carta") {
       lines.push("Transações: Débito/Crédito/Boleto outra IF");
+      pushBlank(lines);
       lines.push("- Carta de Compromisso enviada.");
       lines.push("cole_aqui");
     } else if (a.tipo_transacao_negado === "boleto_nu") {
       lines.push("Transações: Boleto Nubank");
+      pushBlank(lines);
       lines.push("- Contestação realizada no Widget de Boletos.");
     } else if (a.tipo_transacao_negado === "whatsapp") {
       lines.push("Transações: WhatsApp Pay");
+      pushBlank(lines);
       lines.push("- Sem possibilidade de recuperação por CSI. Cliente orientado a contestar junto ao WhatsApp (Meta).");
     } else if (a.tipo_transacao_negado === "pix_whatsapp") {
       lines.push("Transações: PIX via WhatsApp");
+      pushBlank(lines);
       lines.push("- Negado sumariamente. Sem Serial ID disponível pela Meta.");
     } else if (a.tipo_transacao_negado === "recarga_saque") {
       lines.push("Transações: Recarga/Saque ATM");
+      pushBlank(lines);
       lines.push("- Estabelecimentos confiáveis: sem tentativa de recuperação.");
     } else if (a.tipo_transacao_negado === "nupay") {
       const nupayLabels = {pj:"NuPay for PJ",business:"NuPay for Business",gift:"NuPay Gift Card (Epay)"};
       lines.push(`Transações: ${nupayLabels[a.nupay_tipo] || "NuPay"}`);
+      pushBlank(lines);
       if (a.nupay_tipo === "gift") lines.push("- Gift Card Epay: sem fluxo de estorno ou recuperação.");
       if (a.nupay_tipo === "business") lines.push("- NuPay for Business: sem tentativa de recuperação e bloqueio.");
       if (a.nupay_tipo === "pj") lines.push(a.nupay_pj_conta === "sim" ? "- Conta Nu do recebedor identificada. Seguir fluxo de Contas Nu." : "- Sem conta Nu do recebedor. Sem recuperação possível.");
     } else if (a.tipo_transacao_negado === "conta_nu") {
       lines.push("Transações: Conta Nu (beneficiário)");
+      pushBlank(lines);
       lines.push("- Verificado status do reporte de fraude e saldo no BKO.");
       lines.push("- Comentário registrado no Big Mama: Csi-Scam-Victim || Customer__ID:");
     } else if (a.tipo_transacao_negado === "misto") {
       const labels = a.misto_tipos ? getMistoLabels(a.misto_tipos, 'misto_tipos') : ['Vários tipos'];
-      lines.push("Transações: Misto — " + labels.join(' + '));
+      lines.push("Transações: " + labels.join(' + '));
+      pushBlank(lines);
+      if (a.misto_tipos) {
+        const tipos = parseMistoTipos(a.misto_tipos, 'mx_');
+        tipos.forEach(t => {
+          const detail = mistoComponentDetail(t, a, false);
+          if (detail.scriptLines.length > 0) {
+            detail.scriptLines.forEach(l => lines.push("- " + l));
+            if (t === 'carta') lines.push("cole_aqui");
+            pushBlank(lines);
+          }
+        });
+        if (a.nupay_decisao === "acatado") {
+          lines.push("- ATENÇÃO: desfecho misto — parte de NuPay ACATADA (reembolso integral), demais transações NEGADAS.");
+          pushBlank(lines);
+        }
+        if (lines[lines.length - 1] === "") lines.pop();
+      }
     }
-    lines.push("");
+    pushBlank(lines);
 
     if (a.status_recuperacao) {
       const recLabels = {andamento:"Recuperação em andamento.",devolucao:"Devolução total ou parcial realizada.",sem:"Sem recuperação de valores."};
       lines.push(`Status da recuperação: ${recLabels[a.status_recuperacao] || ""}`);
     }
 
+    if (a.transacao_financiada === "sim" || a.triangulacao === "sim" || a.tem_crypto === "sim") pushBlank(lines);
     if (a.transacao_financiada === "sim") lines.push("- Transações financiadas identificadas. Macro apêndice CSIAPX09 adicionada.");
     if (a.triangulacao === "sim") lines.push("- Triangulação identificada. Macro apêndice CSIAPX08 adicionada. Cliente orientado a registrar na outra IF.");
     if (a.tem_crypto === "sim") lines.push("- Transações de criptomoeda envolvidas. Macro apêndice CSIAPX15 adicionada.");
-    lines.push("");
+    pushBlank(lines);
 
     lines.push("Ações realizadas:");
     lines.push("- Conta desbloqueada");lines.push("cole_aqui");
-    lines.push("");
+    pushBlank(lines);
     lines.push(`Decisão: NEGADO`);
     lines.push(`Macro(s): ${macroList}`);
   }
@@ -1306,7 +1550,7 @@ function generateScript(a, result) {
   // ═══ ATO ACATADO ═══
   else if (a.tipo_incidente === "ato" && a.decisao_ato === "acatado") {
     lines.push("ANÁLISE: Cliente relata não reconhecer transações.");
-    lines.push("");
+    pushBlank(lines);
     lines.push("Verificação de segurança:");
     const vulnLabels = {malware:"Malware identificado (toque robótico + app não confiável).",remoto:"Acesso remoto identificado (AnyDesk/TeamViewer/similar).",liveness:"Falha no Liveness identificada.",lgpd:"Quebra de LGPD identificada (colaborador vazou dados).",outra:"Outra vulnerabilidade identificada."};
     lines.push(`- VULNERABILIDADE CONFIRMADA: ${vulnLabels[a.vulnerabilidade_ato] || "Vulnerabilidade identificada."}`);
@@ -1318,14 +1562,14 @@ function generateScript(a, result) {
       lines.push("- Empréstimo/Cash-in totalmente evadido para mesma titularidade: não ajustar.");
     }
     if (a.tem_crypto === "sim") lines.push("- Transações de criptomoeda envolvidas. Jira de 2nd Level preenchido (fila investiments/crypto).");
-    lines.push("");
+    pushBlank(lines);
 
     lines.push("Ações realizadas:");
     lines.push("- ATO confirmado no Widget de Certificados (troca de senha forçada)");
     lines.push("- Ajustes realizados na conta do cliente");
     if (a.transacao_financiada === "sim") lines.push("- Parcelas de transações financiadas antecipadas + Jira preenchido");
     lines.push("- Conta desbloqueada");lines.push("cole_aqui");
-    lines.push("");
+    pushBlank(lines);
     lines.push(`Decisão: ACATADO — Vulnerabilidade explorada`);
     lines.push(`Macro(s): ${macroList}`);
   }
@@ -1333,28 +1577,32 @@ function generateScript(a, result) {
   // ═══ GOLPE NEGADO ═══
   else if (a.tipo_incidente === "golpe" && a.decisao_golpe === "negado") {
     lines.push("ANÁLISE: Cliente relata ter sido vítima de golpe.");
-    lines.push("");
+    pushBlank(lines);
 
     const MO_EXCLUIDOS_SCRIPT = ["eng_social","falso_advogado","site_falso","piramide","emprestimo_falso","falso_leilao","social_media","taxa_premio","boleto_adulterado","motoboy","reporte_incompleto"];
     const moExcluidoScript = MO_EXCLUIDOS_SCRIPT.includes(a.tipo_golpe);
     lines.push("Verificação de vulnerabilidades:");
     lines.push("- Sem indícios de vulnerabilidade explorada (malware/acesso remoto/liveness/LGPD).");
     if (moExcluidoScript) lines.push("- Este MO é excluído da Política de Reembolso — caso negado conforme critérios de exclusão.");
-    lines.push("");
+    pushBlank(lines);
 
     if (a.tipo_transacao_golpe === "whatsapp_golpe") {
       lines.push("Transações: WhatsApp Pay");
+      pushBlank(lines);
       lines.push("- Sem possibilidade de recuperação por CSI.");
       lines.push("- Cliente orientado a abrir contestação junto ao WhatsApp (Meta).");
     } else if (a.tipo_transacao_golpe === "pix_whatsapp_golpe") {
       lines.push("Transações: PIX via WhatsApp");
+      pushBlank(lines);
       lines.push("- Negado sumariamente. Sem Serial ID disponível pela Meta.");
     } else if (a.tipo_transacao_golpe === "recarga_saque_golpe") {
       lines.push("Transações: Recarga/Saque ATM");
+      pushBlank(lines);
       lines.push("- Estabelecimentos confiáveis: sem tentativa de recuperação.");
     } else if (a.tipo_transacao_golpe === "nupay_golpe") {
       const nupayLabels = {pj_golpe:"NuPay for PJ",business_golpe:"NuPay for Business",gift_golpe:"NuPay Gift Card (Epay)"};
       lines.push(`Transações: ${nupayLabels[a.golpe_nupay_tipo] || "NuPay"}`);
+      pushBlank(lines);
       if (a.golpe_nupay_tipo === "gift_golpe") lines.push("- Gift Card Epay: sem fluxo de estorno ou recuperação.");
       else if (a.golpe_nupay_tipo === "business_golpe") lines.push("- NuPay for Business: sem tentativa de recuperação e bloqueio.");
       else if (a.golpe_nupay_tipo === "pj_golpe") {
@@ -1363,6 +1611,7 @@ function generateScript(a, result) {
       }
     } else if (a.tipo_transacao_golpe === "conta_nu_golpe") {
       lines.push("Transações: Conta Nu (beneficiário)");
+      pushBlank(lines);
       const statusLabels = {
         vermelho_saldo:"Reporte vermelho (fraudador confirmado) — com saldo. TEC verificado / Jira T&C aberto.",
         vermelho_sem:"Reporte vermelho (fraudador confirmado) — sem saldo para recuperação.",
@@ -1377,10 +1626,25 @@ function generateScript(a, result) {
     } else {
       if (a.tipo_transacao_golpe === "misto_golpe" && a.misto_tipos_golpe) {
         const labels = getMistoLabels(a.misto_tipos_golpe, 'misto_tipos_golpe');
-        lines.push("Transações: Misto — " + labels.join(' + '));
+        lines.push("Transações: " + labels.join(' + '));
+        pushBlank(lines);
+        const tipos = parseMistoTipos(a.misto_tipos_golpe, 'mgx_');
+        tipos.forEach(t => {
+          const detail = mistoComponentDetail(t, a, true);
+          if (detail.scriptLines.length > 0) {
+            detail.scriptLines.forEach(l => lines.push("- " + l));
+            if (t === 'carta') lines.push("cole_aqui");
+            pushBlank(lines);
+          }
+        });
+        if (a.golpe_nupay_decisao === "acatado") {
+          lines.push("- ATENÇÃO: desfecho misto — parte de NuPay ACATADA (reembolso integral), demais transações NEGADAS.");
+          pushBlank(lines);
+        }
       } else {
         const txLabels = {pix_golpe:"PIX",carta_golpe:"Débito/Crédito/Boleto outra IF",boleto_nu_golpe:"Boleto Nubank",misto_golpe:"Misto (vários tipos)"};
         lines.push(`Transações: ${txLabels[a.tipo_transacao_golpe] || ""}`);
+        pushBlank(lines);
         if (a.tipo_transacao_golpe === "pix_golpe") {
           if (a.pix_prazo === "sim") {
             lines.push("- Transação acima de 80 dias corridos. MED não aplicável (Res. BCB nº 103).");
@@ -1391,15 +1655,17 @@ function generateScript(a, result) {
         }
         if (a.tipo_transacao_golpe === "carta_golpe") { lines.push("- Carta de Compromisso enviada."); lines.push("cole_aqui"); }
         if (a.tipo_transacao_golpe === "boleto_nu_golpe") lines.push("- Contestação realizada no Widget de Boletos.");
+        pushBlank(lines);
       }
       const recLabels = {andamento:"Recuperação em andamento.",devolucao:"Devolução total ou parcial realizada.",sem:"Sem recuperação de valores."};
       if (a.status_recuperacao_golpe) lines.push(`- Status: ${recLabels[a.status_recuperacao_golpe] || ""}`);
     }
 
+    if (a.triangulacao === "sim" || a.transacao_financiada === "sim" || a.tem_crypto === "sim") pushBlank(lines);
     if (a.triangulacao === "sim") lines.push("- Triangulação identificada. Cliente orientado a registrar na outra IF. MED mantido.");
     if (a.transacao_financiada === "sim") lines.push("- Transação financiada (Pix/Boleto no crédito). Macro apêndice de tentativa de recuperação (CSIAPX09) adicionada.");
     if (a.tem_crypto === "sim") lines.push("- Transações de criptomoeda envolvidas. Macro apêndice CSIAPX15 adicionada.");
-    lines.push("");
+    pushBlank(lines);
     lines.push(`Decisão: NEGADO`);
     lines.push(`Macro(s): ${macroList}`);
   }
@@ -1407,7 +1673,7 @@ function generateScript(a, result) {
   // ═══ GOLPE ACATADO ═══
   else if (a.tipo_incidente === "golpe" && a.decisao_golpe === "acatado") {
     lines.push("ANÁLISE: Cliente relata ter sido vítima de golpe.");
-    lines.push("");
+    pushBlank(lines);
 
     const motLabels = {
       vulnerabilidade:"Vulnerabilidade explorada identificada.",
@@ -1425,12 +1691,12 @@ function generateScript(a, result) {
       lines.push("- Empréstimo/Cash-in de mesma titularidade: não ajustar.");
     }
     if (a.tem_crypto === "sim") lines.push("- Transações de criptomoeda envolvidas. Jira de 2nd Level preenchido.");
-    lines.push("");
+    pushBlank(lines);
 
     lines.push("Ações realizadas:");
     lines.push("- Ajustes realizados na conta do cliente");
     if (a.transacao_financiada === "sim") lines.push("- Parcelas de transações financiadas antecipadas");
-    lines.push("");
+    pushBlank(lines);
     lines.push(`Decisão: ACATADO — ${motLabels[a.motivo_acate_golpe] || "Decisão interna"}`);
     lines.push(`Macro(s): ${macroList}`);
   }
@@ -1439,39 +1705,39 @@ function generateScript(a, result) {
   else if (a.tipo_transacao_negado === "emprestimo" || a.tipo_transacao_golpe === "emprestimo_golpe") {
     const tipoInc = a.tipo_incidente === "golpe" ? "GOLPE" : "ATO";
     lines.push(`ANÁLISE: Cliente relata contratação fraudulenta de empréstimo. Incidente: ${tipoInc.toUpperCase()}.`);
-    lines.push("");
+    pushBlank(lines);
     lines.push("Verificação de segurança:");
     lines.push("- Sem indícios de invasão de conta / vulnerabilidade explorada.");
     lines.push("- Empréstimo contratado via dispositivo e autenticação considerados confiáveis.");
-    lines.push("");
+    pushBlank(lines);
     if (a.emprestimo_decisao === "acatado") {
       lines.push("Decisão interna: ACATADO — cancelamento dos contratos pelo time de empréstimos.");
-      lines.push("");
+      pushBlank(lines);
       lines.push("Ações realizadas:");
       lines.push("- Caso encaminhado para 2nd Level via Medium Adjustments");
       lines.push("- NÃO cancelar empréstimo diretamente no Widget");
       lines.push("- Conta desbloqueada");
       lines.push("cole_aqui");
-      lines.push("");
+      pushBlank(lines);
       lines.push(`Decisão: ACATADO — Empréstimo`);
     } else if (a.emprestimo_prazo === "ate7") {
       lines.push("Prazo de cancelamento: dentro de 7 dias corridos da contratação.");
-      lines.push("");
+      pushBlank(lines);
       lines.push("Ações realizadas:");
       lines.push("- Cliente orientado a solicitar cancelamento via Chat ou Telefone");
       lines.push("- Informado sobre custo de IOF (mantido por legislação)");
       lines.push("- Conta desbloqueada");
       lines.push("cole_aqui");
-      lines.push("");
+      pushBlank(lines);
       lines.push(`Decisão: NEGADO — Empréstimo (até 7 dias)`);
     } else {
       lines.push("Prazo de cancelamento: expirado (acima de 7 dias corridos).");
-      lines.push("");
+      pushBlank(lines);
       lines.push("Ações realizadas:");
       lines.push("- Cliente orientado a antecipar parcelas no app (desconto proporcional dos juros)");
       lines.push("- Conta desbloqueada");
       lines.push("cole_aqui");
-      lines.push("");
+      pushBlank(lines);
       lines.push(`Decisão: NEGADO — Empréstimo (após 7 dias)`);
     }
     lines.push(`Macro(s): ${macroList}`);
@@ -1481,28 +1747,28 @@ function generateScript(a, result) {
   else if (a.tipo_incidente === "chip_replay") {
     if (a.decisao_chip_replay === "acatado") {
       lines.push("ANÁLISE: Cliente relata compra não reconhecida com uso de chip e senha.");
-      lines.push("");
+      pushBlank(lines);
       lines.push("Verificação de comprometimento:");
       lines.push("- Anomalia identificada no criptograma/contador da transação.");
       lines.push("- Indícios de Chip Replay confirmados.");
-      lines.push("");
+      pushBlank(lines);
       lines.push("Ações realizadas:");
       lines.push("- Jira aberto para o time Texas Rangers");
       lines.push("- Carta de Compromisso enviada para recuperação");
       lines.push("- Ajustes realizados na conta do cliente");
       lines.push("- Conta desbloqueada");lines.push("cole_aqui");
-      lines.push("");
+      pushBlank(lines);
       lines.push(`Decisão: ACATADO — Chip Replay`);
     } else {
       lines.push("ANÁLISE: Cliente relata compra não reconhecida com uso de chip e senha.");
-      lines.push("");
+      pushBlank(lines);
       lines.push("Verificação de comprometimento:");
       lines.push("- Sem anomalias no criptograma ou contador das transações.");
       lines.push("- Sem indícios de comprometimento no cartão.");
-      lines.push("");
+      pushBlank(lines);
       lines.push("Ações realizadas:");
       lines.push("- Conta desbloqueada");lines.push("cole_aqui");
-      lines.push("");
+      pushBlank(lines);
       lines.push(`Decisão: NEGADO — Sem indícios de Chip Replay`);
     }
     lines.push(`Macro(s): ${macroList}`);
@@ -1511,11 +1777,11 @@ function generateScript(a, result) {
   // ═══ DESACORDO COMERCIAL ═══
   else if (a.tipo_incidente === "desacordo") {
     lines.push("ANÁLISE: Incidente classificado como Desacordo Comercial.");
-    lines.push("");
+    pushBlank(lines);
     lines.push("- Não se trata de fraude. Cliente insatisfeito com produto/serviço recebido.");
     lines.push("- Não realizar Bloqueio e Recuperação (cancelar MED, não enviar carta).");
     lines.push("- Cliente orientado a entrar em contato diretamente com o estabelecimento.");
-    lines.push("");
+    pushBlank(lines);
     lines.push(`Decisão: INVÁLIDO — Desacordo Comercial`);
     lines.push(`Macro(s): ${macroList}`);
   }
@@ -1523,12 +1789,12 @@ function generateScript(a, result) {
   // ═══ PIX ERRADO ═══
   else if (a.tipo_incidente === "pix_errado") {
     lines.push("ANÁLISE: Incidente classificado como PIX Errado.");
-    lines.push("");
+    pushBlank(lines);
     lines.push("- Erro de digitação da chave PIX. Não houve fraude.");
     lines.push("- Não realizar Bloqueio e Recuperação (cancelar MED, não enviar carta).");
     lines.push("- Dados do comprovante e ID universal fornecidos (sem CPF do recebedor — LGPD).");
     lines.push("- Cliente orientado a tentar contato com o recebedor.");
-    lines.push("");
+    pushBlank(lines);
     lines.push(`Decisão: INVÁLIDO — PIX Errado`);
     lines.push(`Macro(s): ${macroList}`);
   }
@@ -1536,11 +1802,11 @@ function generateScript(a, result) {
   // ═══ CANCELAMENTO ═══
   else if (a.tipo_incidente === "cancelamento") {
     lines.push("ANÁLISE: Cliente solicita cancelamento do incidente.");
-    lines.push("");
+    pushBlank(lines);
     lines.push("- Incidente cancelado a pedido do cliente.");
     lines.push("- Jira aberto para time de Fraude reavaliar conta beneficiária (se aplicável).");
     lines.push("- Registro no Marte com número do Ticket Jira.");
-    lines.push("");
+    pushBlank(lines);
     lines.push(`Decisão: CANCELADO`);
     lines.push(`Macro(s): ${macroList}`);
   }
@@ -1548,10 +1814,10 @@ function generateScript(a, result) {
   // ═══ BOLETO CONSUMO ═══
   else if (a.tipo_incidente === "boleto_consumo") {
     lines.push("ANÁLISE: Incidente envolve boleto de consumo/convênio/concessionária.");
-    lines.push("");
+    pushBlank(lines);
     lines.push("- Boletos de serviços essenciais não são passíveis de contestação por CSI.");
     lines.push("- Cliente orientado a entrar em contato com o emissor do boleto.");
-    lines.push("");
+    pushBlank(lines);
     lines.push(`Decisão: INVÁLIDO — Boleto de Consumo`);
     lines.push(`Macro(s): ${macroList}`);
   }
@@ -1581,8 +1847,6 @@ function getObservacaoInterna(a) {
 `Essa observação foi registrada pelo analista decisor do caso.
 
 Seguiremos com o Reembolso Integral das transações.
-XXX_TRANSAÇÃO_XXXX
-XXX_TRANSAÇÃO_XXXX
 XXX_TRANSAÇÃO_XXXX
 
 Caso o cliente questione sobre o andamento da sua contestação envie a macro:
@@ -1622,12 +1886,8 @@ CSISTS04 - [CSI] Status do Incidente - Reembolso Integral`
 
 Seguiremos com a Tentativa de Recuperação das transações:
 XXX_TRANSAÇÃO_XXXX
-XXX_TRANSAÇÃO_XXXX
-XXX_TRANSAÇÃO_XXXX
 
 As transações PIX a seguir, tem o seguinte resultado de recuperação:
-XXX_TRANSAÇÃO_XXXX - Valor recuperado: R$XX.XX
-XXX_TRANSAÇÃO_XXXX - Valor recuperado: R$XX.XX
 XXX_TRANSAÇÃO_XXXX - Valor recuperado: R$XX.XX
 
 Caso o cliente questione sobre o andamento da sua contestação, siga as orientações do card e utilize a macro: CSISTS06 - [CSI] Status do Incidente - Andamento da recuperação`
@@ -1641,8 +1901,6 @@ Caso o cliente questione sobre o andamento da sua contestação, siga as orienta
 `Essa observação foi registrada pelo analista decisor do caso.
 
 Seguiremos com a Tentativa de Recuperação das transações:
-XXX_TRANSAÇÃO_XXXX
-XXX_TRANSAÇÃO_XXXX
 XXX_TRANSAÇÃO_XXXX
 
 Caso o cliente questione sobre o andamento da sua contestação, transfira o caso para o time de CSI.
@@ -1662,8 +1920,6 @@ CSISTS02 - [CSI] Status do Incidente - Finalizado`
 `Essa observação foi registrada pelo analista decisor do caso.
 
 Não foi possível recuperar o valor transferido das seguintes transações:
-XXX_TRANSAÇÃO_XXXX
-XXX_TRANSAÇÃO_XXXX
 XXX_TRANSAÇÃO_XXXX
 
 Caso o cliente questione sobre o andamento da sua contestação, siga as orientações do card e utilize a macro: CSISTS06 - [CSI] Status do Incidente - Andamento da recuperação`
