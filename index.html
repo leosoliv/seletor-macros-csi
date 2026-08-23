@@ -1422,7 +1422,7 @@ function getTagsMarte(a) {
       // fake_callcenter: sem tag aqui — é adicionada direto no sistema
     };
     if (a.tipo_golpe && moTagMap[a.tipo_golpe]) tags.push(moTagMap[a.tipo_golpe]);
-    if (a.tipo_golpe !== "fake_callcenter") {
+    if (a.tipo_golpe === "fake_callcenter") {
       hints.push("Verificar se aplicável: [FRICTION] (ignorou barreiras do app) | [CHAT-TO-BYPASS] (pediu desbloqueio via chat)");
     }
   }
