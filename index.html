@@ -308,6 +308,23 @@
     </div>
   </div>
 
+  <div class="alert-banner" id="alert-banner-otp">
+    <button class="alert-banner-close" onclick="dismissAlertOtp()" title="Fechar por agora">✕</button>
+    <div class="alert-banner-title">🧪 Novo teste — ATO com autenticação por OTP</div>
+    <div class="alert-banner-body">
+      <b>Quando aplicar:</b> sempre que, na contestação, o último auth de device do cliente tiver sido via <b>OTP</b> (código por SMS/WhatsApp) em vez de Liveness.
+      <br><br>
+      <b>Antes de abrir o incidente, pergunte:</b> "Você recebeu algum código de autenticação hoje?"
+      <ol>
+        <li><b>Se SIM:</b> quem solicitou o código, em qual canal chegou (SMS/WhatsApp), e se recebeu ligação/orientação de alguém dizendo ser do Nubank ou compartilhou o código</li>
+        <li><b>Se NÃO:</b> se trocou chip/fez portabilidade recentemente, se ficou sem sinal/SMS, ou teve problema no WhatsApp</li>
+      </ol>
+      <b>No Backoffice:</b> reembolse/acate o caso — desfecho padrão durante o teste. Adicione a tag <b>[Auth-OTP]</b> + link do comunicado no comentário do incidente.
+      <br><br>
+      ⚠️ Contestações desse grupo (inclusive controle) passam por <b>análise manual</b> — não finalizar automaticamente.
+    </div>
+  </div>
+
   <div class="steps" id="steps-container"></div>
   <div class="hidden" id="result-section"></div>
   <button class="reset-btn hidden" id="reset-btn" onclick="resetAll()">🔄 Nova consulta</button>
@@ -2161,6 +2178,11 @@ render();
 // ── Banner de alerta (App Cloned) ──
 function dismissAlert() {
   document.getElementById('alert-banner').classList.add('hidden-banner');
+}
+
+// ── Banner de alerta (ATO com OTP) ──
+function dismissAlertOtp() {
+  document.getElementById('alert-banner-otp').classList.add('hidden-banner');
 }
 
 // ── Bloco de Notas ──
