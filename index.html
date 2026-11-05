@@ -230,38 +230,6 @@
   .script-body[contenteditable="true"]{outline:none;cursor:text}
   .script-body[contenteditable="true"]:focus{box-shadow:inset 0 0 0 2px rgba(124,58,237,.4)}
 
-  /* Observação Interna */
-  .obs-section{
-    margin-top:14px;background:#1a1a2e;border-radius:12px;padding:0;
-    overflow:hidden;border:1px solid #4a3f6b;
-  }
-  .obs-header{
-    display:flex;align-items:center;justify-content:space-between;
-    padding:12px 16px;background:#16213e;border-bottom:1px solid #4a3f6b;
-  }
-  .obs-header-title{font-size:13px;font-weight:700;color:#f59e0b;display:flex;align-items:center;gap:6px}
-  .obs-label{
-    display:inline-block;margin-bottom:8px;padding:4px 10px;
-    background:rgba(245,158,11,.15);border-radius:6px;
-    font-size:11px;font-weight:800;color:#f59e0b;letter-spacing:.5px;
-  }
-  .copy-obs-btn{
-    display:inline-flex;align-items:center;gap:6px;padding:6px 14px;
-    background:#f59e0b;color:#1a1a2e;border:none;border-radius:8px;
-    font-size:12px;font-weight:700;cursor:pointer;transition:all .2s;
-  }
-  .copy-obs-btn:hover{background:#d97706}
-  .copy-obs-btn.copied{background:#22c55e;color:#fff}
-  .obs-body{
-    padding:16px;font-family:'Cascadia Code','Fira Code','Consolas',monospace;
-    font-size:12.5px;line-height:1.7;color:#d1d5db;white-space:pre-wrap;
-    word-break:break-word;max-height:350px;overflow-y:auto;
-  }
-  .obs-body .obs-placeholder{color:#f59e0b;font-weight:700;background:rgba(245,158,11,.1);padding:1px 4px;border-radius:3px}
-  .obs-body .obs-macro-ref{color:#60a5fa;font-weight:600}
-  .obs-body[contenteditable="true"]{outline:none;cursor:text}
-  .obs-body[contenteditable="true"]:focus{box-shadow:inset 0 0 0 2px rgba(245,158,11,.4)}
-
   .hidden{display:none}
 
   /* Bloco de Notas flutuante */
@@ -1875,100 +1843,6 @@ function generateScript(a, result) {
   return lines.join('\n');
 }
 
-function getObservacaoInterna(a) {
-  if (["desacordo","pix_errado","cancelamento","boleto_consumo"].includes(a.tipo_incidente)) return null;
-
-  const isAcatado =
-    (a.tipo_incidente === "ato" && a.decisao_ato === "acatado") ||
-    (a.tipo_incidente === "golpe" && a.decisao_golpe === "acatado") ||
-    (a.tipo_incidente === "chip_replay" && a.decisao_chip_replay === "acatado");
-
-  if (isAcatado) {
-    return {
-      label: "CSI - Informação ao time externo - Reembolso Integral",
-      text:
-`Essa observação foi registrada pelo analista decisor do caso.
-
-Seguiremos com o Reembolso Integral das transações.
-XXX_TRANSAÇÃO_XXXX
-
-Caso o cliente questione sobre o andamento da sua contestação envie a macro:
-CSISTS04 - [CSI] Status do Incidente - Reembolso Integral`
-    };
-  }
-
-  const mistoHas = (key, prefix, val) => a[key] ? a[key].split(',').some(v => v === prefix + val) : false;
-  const mistoHasPix = mistoHas('misto_tipos','mx_','pix') || mistoHas('misto_tipos_golpe','mgx_','pix');
-  const mistoHasOutra = mistoHas('misto_tipos','mx_','carta') || mistoHas('misto_tipos','mx_','boleto_nu') || mistoHas('misto_tipos_golpe','mgx_','carta') || mistoHas('misto_tipos_golpe','mgx_','boleto_nu');
-
-  const isPix =
-    (a.tipo_transacao_negado === "pix") ||
-    (a.tipo_transacao_golpe === "pix_golpe") ||
-    mistoHasPix;
-
-  const isOutra =
-    (a.tipo_transacao_negado === "carta" || a.tipo_transacao_negado === "boleto_nu") ||
-    (a.tipo_transacao_golpe === "carta_golpe" || a.tipo_transacao_golpe === "boleto_nu_golpe") ||
-    (a.tipo_transacao_negado === "misto" && !mistoHasPix) ||
-    (a.tipo_transacao_golpe === "misto_golpe" && !mistoHasPix) ||
-    mistoHasOutra;
-
-  const hasRecovery =
-    (a.status_recuperacao === "andamento" || a.status_recuperacao === "devolucao") ||
-    (a.status_recuperacao_golpe === "andamento" || a.status_recuperacao_golpe === "devolucao");
-
-  const contaNuComSaldo =
-    (a.tipo_transacao_negado === "conta_nu" && (a.status_recuperacao === "andamento" || a.status_recuperacao === "devolucao")) ||
-    (a.tipo_transacao_golpe === "conta_nu_golpe" && ["vermelho_saldo","amarelo_saldo","sem_reporte_saldo"].includes(a.golpe_conta_nu_saldo));
-
-  if (isPix && hasRecovery) {
-    return {
-      label: "CSI - Informação ao time externo - Tentativa de recuperação [Somente PIX]",
-      text:
-`Essa observação foi registrada pelo analista decisor do caso.
-
-Seguiremos com a Tentativa de Recuperação das transações:
-XXX_TRANSAÇÃO_XXXX
-
-As transações PIX a seguir, tem o seguinte resultado de recuperação:
-XXX_TRANSAÇÃO_XXXX - Valor recuperado: R$XX.XX
-
-Caso o cliente questione sobre o andamento da sua contestação, siga as orientações do card e utilize a macro: CSISTS06 - [CSI] Status do Incidente - Andamento da recuperação`
-    };
-  }
-
-  if ((isOutra && hasRecovery) || contaNuComSaldo) {
-    return {
-      label: "CSI - Informação ao time externo - Tentativa de recuperação [Outras transações]",
-      text:
-`Essa observação foi registrada pelo analista decisor do caso.
-
-Seguiremos com a Tentativa de Recuperação das transações:
-XXX_TRANSAÇÃO_XXXX
-
-Caso o cliente questione sobre o andamento da sua contestação, transfira o caso para o time de CSI.
-
-Devido a algumas informações importantes para um posicionamento assertivo não estarem disponíveis ao time de atendimento externo, não passe nenhum posicionamento, apenas direcione ao time responsável.
-
-[Email]
-CSIOBS00 - CSI - Transferência para o time interno
-[Chat e Telefone]
-CSISTS02 - [CSI] Status do Incidente - Finalizado`
-    };
-  }
-
-  return {
-    label: "CSI - Informação ao time externo - Sem recuperação",
-    text:
-`Essa observação foi registrada pelo analista decisor do caso.
-
-Não foi possível recuperar o valor transferido das seguintes transações:
-XXX_TRANSAÇÃO_XXXX
-
-Caso o cliente questione sobre o andamento da sua contestação, siga as orientações do card e utilize a macro: CSISTS06 - [CSI] Status do Incidente - Andamento da recuperação`
-  };
-}
-
 function renderResult(result) {
   let html = `<div class="result-header">`;
   html += `<div class="result-icon">✅</div>`;
@@ -2007,26 +1881,6 @@ function renderResult(result) {
   html += `</div>`;
   html += `<div class="script-body" id="script-body" contenteditable="true" spellcheck="false">${scriptHtml}</div>`;
   html += `</div>`;
-
-  const obs = getObservacaoInterna(answers);
-  if (obs) {
-    const obsHtml = obs.text
-      .replace(/(XXX_TRANSAÇÃO_XXXX[^\n]*)/g, '<span class="obs-placeholder">$1</span>')
-      .replace(/(R\$XX\.XX)/g, '<span class="obs-placeholder">$1</span>')
-      .replace(/(CSIOBS\d+|CSISTS\d+)([^\n<]*)/g, '<span class="obs-macro-ref">$1$2</span>');
-
-    html += `<div class="obs-section">`;
-    html += `<div class="obs-header">`;
-    html += `<span class="obs-header-title">📨 Observação Interna (BPO) <span style="font-size:10px;font-weight:500;color:#6b7280;letter-spacing:0">✏️ editável</span></span>`;
-    html += `<button class="copy-obs-btn" id="copy-obs-btn" onclick="copyObs()">📋 Copiar</button>`;
-    html += `</div>`;
-    html += `<div class="obs-body-label-wrap" style="padding:14px 16px 0">`;
-    html += `<span class="obs-label">${obs.label}</span>`;
-    html += `</div>`;
-    html += `<div class="obs-body" id="obs-body" contenteditable="true" spellcheck="false" style="padding-top:8px">`;
-    html += obsHtml;
-    html += `</div></div>`;
-  }
 
   if (result.notes.length) {
     html += `<div class="notes"><div class="notes-title">⚠️ Lembretes importantes:</div>`;
@@ -2096,22 +1950,6 @@ function copyScript() {
     showToast('✅ Script de análise copiado!');
     setTimeout(() => {
       btn.textContent = '📋 Copiar tudo';
-      btn.classList.remove('copied');
-    }, 2000);
-  }).catch(() => showToast('⚠️ Não foi possível copiar. Selecione e copie manualmente.'));
-}
-
-function copyObs() {
-  const el = document.getElementById('obs-body');
-  if (!el) return;
-  const text = el.innerText;
-  copyToClipboard(text).then(() => {
-    const btn = document.getElementById('copy-obs-btn');
-    btn.textContent = '✅ Copiado!';
-    btn.classList.add('copied');
-    showToast('✅ Observação interna copiada!');
-    setTimeout(() => {
-      btn.textContent = '📋 Copiar';
       btn.classList.remove('copied');
     }, 2000);
   }).catch(() => showToast('⚠️ Não foi possível copiar. Selecione e copie manualmente.'));
